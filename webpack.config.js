@@ -45,11 +45,6 @@ module.exports = {
         exclude: /node_modules/,
       },
       {
-        test: /\.tsx?$/,
-        use: 'ts-loader',
-        exclude: /node_modules/,
-      },
-      {
         test: /\.less|\.css$/,
         include: [path.resolve(__dirname, 'src')],
         use: [
