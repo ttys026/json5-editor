@@ -45,11 +45,6 @@ module.exports = {
         exclude: /node_modules/,
       },
       {
-        test: /\.tsx?$/,
-        use: 'ts-loader',
-        exclude: /node_modules/,
-      },
-      {
         test: /\.less|\.css$/,
         include: [path.resolve(__dirname, 'src')],
         use: [
@@ -58,12 +53,6 @@ module.exports = {
           },
           {
             loader: 'css-loader',
-            options: {
-              modules: {
-                mode: 'local',
-                localIdentName: '[path][name]__[local]--[hash:base64:5]',
-              },
-            },
           },
           {
             loader: 'less-loader',
