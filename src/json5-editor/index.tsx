@@ -1,19 +1,26 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import Editor from 'react-simple-code-editor';
-
-import './style.less';
-import { highlight, languages } from 'prismjs';
-// import 'prismjs/components/prism-clike';
-// import 'prismjs/components/prism-javascript';
+import { useControllableValue } from 'ahooks';
+import Prism, { highlight, languages } from 'prismjs';
 import { fillIndent, fillAfter } from './utils/fillPairs';
+import { registerPlugin } from './utils/matchBraces';
+import './style.less';
 
+registerPlugin();
 interface Props {
-  initialValue: string;
+  initialValue?: string;
+  value?: string;
+  onChange?: (v: string) => void;
+  placeholder?: string;
+  style?: React.CSSProperties;
+  className?: string;
 }
 
 export default (props: Props) => {
   const textAreaRef = useRef<HTMLTextAreaElement | null>(null);
-  const [code, setCode] = useState(props.initialValue || '');
+  const [code = '', setCode] = useControllableValue<string>(props, {
+    defaultValue: props.initialValue || '',
+  }) as [string, React.Dispatch<React.SetStateAction<string>>];
 
   const codeRef = useRef(code);
   codeRef.current = code;
@@ -23,60 +30,86 @@ export default (props: Props) => {
 
   useEffect(() => {
     const textArea = textAreaRef.current!;
-    const handler = (ev: KeyboardEvent) => {
+    const keyHandler = (ev: KeyboardEvent) => {
       if (ev.code === 'Enter' && !ev.isComposing) {
-        fillIndent(textArea, '{', '}', codeRef.current, setCode, ev);
-        fillIndent(textArea, '[', ']', codeRef.current, setCode, ev);
-
         const startPos = textArea?.selectionStart || 0;
         const endPos = textArea?.selectionEnd || 0;
+        // 如果选中了文字，则不做特殊处理
         if (startPos !== endPos) {
           return;
         }
-        const prefix = codeRef.current.slice(0, startPos);
-        const newLineStartIndex = prefix.lastIndexOf('\n') + 1;
-        const currentLine = prefix.slice(newLineStartIndex);
-        const currentIndexInLine = startPos - newLineStartIndex;
+        const filled = [
+          fillIndent(textArea, '{', '}', codeRef.current, setCode, ev),
+          fillIndent(textArea, '[', ']', codeRef.current, setCode, ev),
+        ];
+        const prefixOfCursor = codeRef.current.slice(0, startPos);
+        const newLineStartIndex = prefixOfCursor.lastIndexOf('\n') + 1;
+        const currentLine = prefixOfCursor.slice(newLineStartIndex);
+        const prefixOfLine = prefixOfCursor.slice(0, newLineStartIndex);
+        const leadingWhiteSpace =
+          currentLine.split('').findIndex(ele => ele !== ' ') || 0;
 
-        // 存在冒号，可认为是一个 property 独占的一行
-        if (currentLine.indexOf(':') !== -1) {
-          if (currentLine.indexOf('//') !== -1) {
-            // 粗略的认为存在注释
-            if (currentIndexInLine > currentLine.indexOf('//')) {
-              // 存在注释，在注释前一个字符的位置加逗号, 并换行
-              ev.preventDefault();
-              setCode(c => {
-                let beforeComma = c.slice(
-                  0,
-                  currentLine.indexOf('//') + newLineStartIndex,
-                );
-                const leadingWhiteSpace =
-                  currentLine.split('').findIndex(ele => ele !== ' ') || 0;
-                const afterComma = c.slice(
-                  currentLine.indexOf('//') + newLineStartIndex,
-                  startPos,
-                );
-                const rest = c.slice(startPos);
-                const beforeNewLine = [
-                  beforeComma,
-                  beforeComma.trim().endsWith(',') ? '' : ', ',
-                  afterComma,
-                  `\n${Array(leadingWhiteSpace + 1).join(' ')}`,
-                ].join('');
-                window.requestAnimationFrame(() => {
-                  textArea?.setSelectionRange(
-                    beforeNewLine.length,
-                    beforeNewLine.length,
-                  );
-                });
-                return [beforeNewLine, rest].join('');
-              });
-            }
-          } else {
-            if (!currentLine.trim().endsWith(',')) {
-              document.execCommand('insertText', false, ',');
-            }
+        if (filled.some(Boolean)) {
+          return;
+        }
+
+        try {
+          // 浏览器兼容性考虑，不使用 lookbehind
+          // const regexRet = /(.*):((?:(?!\/\/).)+)(\/\/.*)?/.exec(currentLine);
+          const regexRet = /(.*):(.+)/.exec(currentLine);
+          const [, rowKey = '', rowValue = ''] = regexRet || [];
+          const commentSplitIndex = rowValue.lastIndexOf('//');
+          const [key, value, comments] = [
+            rowKey,
+            commentSplitIndex !== -1
+              ? rowValue.slice(0, commentSplitIndex)
+              : rowValue,
+            commentSplitIndex !== -1 ? rowValue.slice(commentSplitIndex) : '',
+          ].map(ele => ele.trim());
+          if (!key) {
+            // 缺少 key，则此行不是合法 property，不做处理
+            return;
           }
+          if (!value) {
+            // 缺少 value property，不做处理
+            return;
+          }
+          ev.preventDefault();
+          const valueWithoutTrailingComma = value.endsWith(',')
+            ? value.slice(0, value.length - 1)
+            : value;
+          const needConvertValue = (val: string) => {
+            return (
+              isNaN(Number(val)) &&
+              !val.includes('[') &&
+              !val.includes('{') &&
+              !val.includes('"') &&
+              !val.includes("'") &&
+              val !== 'true' &&
+              val !== 'false'
+            );
+          };
+          const formattedValue = needConvertValue(valueWithoutTrailingComma)
+            ? `"${valueWithoutTrailingComma}"`
+            : valueWithoutTrailingComma;
+          const formattedProperty =
+            `${rowKey}: ${formattedValue},${comments ? ` ${comments}` : ''}` +
+            `\n${Array(leadingWhiteSpace + 1).join(' ')}`;
+          setCode(c => {
+            window.requestAnimationFrame(() => {
+              textArea?.setSelectionRange(
+                startPos + formattedProperty.length - currentLine.length,
+                startPos + formattedProperty.length - currentLine.length,
+              );
+            });
+            return [
+              prefixOfLine,
+              formattedProperty,
+              c.slice(newLineStartIndex + currentLine.length),
+            ].join('');
+          });
+        } catch (e) {
+          // do nothing
         }
       }
 
@@ -120,24 +153,29 @@ export default (props: Props) => {
         fillAfter(textArea, "'");
       }
     };
-    textArea?.addEventListener('keydown', handler);
+    textArea?.addEventListener('keydown', keyHandler);
     return () => {
-      textArea?.removeEventListener('keydown', handler);
+      textArea?.removeEventListener('keydown', keyHandler);
     };
   }, []);
 
   return (
-    <div className={'json5-editor-wrapper'}>
+    <div className={`json5-editor-wrapper ${props.className || ''}`.trim()}>
       <Editor
         ref={(r: any) => (textAreaRef.current = r?._input)}
         value={code}
-        placeholder="hello"
-        onValueChange={code => setCode(code)}
+        placeholder={props.placeholder}
+        onValueChange={e => {
+          setCode(e);
+          Prism.hooks.run('before-insert', {});
+        }}
         highlight={code => highlight(code, languages.js, 'JavaScript')}
-        padding={10}
+        padding={8}
+        className={'match-braces'}
         style={{
           fontFamily: 'SFMono-Regular,Consolas,Liberation Mono,Menlo,monospace',
           fontSize: 14,
+          ...props.style,
         }}
       />
     </div>

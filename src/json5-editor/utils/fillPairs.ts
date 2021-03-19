@@ -8,8 +8,10 @@ export const fillIndent = (
 ) => {
   const startPos = textArea?.selectionStart || 0;
   const endPos = textArea?.selectionEnd || 0;
+  const condition =
+    startPos === endPos && (code || '')[startPos - 1] === needle;
   // 没有选中任何文本，且前一个字符是可以被配对时：
-  if (startPos === endPos && (code || '')[startPos - 1] === needle) {
+  if (condition) {
     event.preventDefault();
     setCode(c => {
       const prefix = c.slice(0, startPos);
@@ -49,6 +51,7 @@ export const fillIndent = (
       }
     });
   }
+  return condition;
 };
 
 export const fillAfter = (textArea: HTMLTextAreaElement, needle: string) => {
