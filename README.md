@@ -1,11 +1,8 @@
----
-group:
-  title: JSON5-editor
----
-
 # json5-editor
 
 A lite JSON5 editor with smart autoComplete and zero configuration
+
+[NPM](https://www.npmjs.com/package/json5-editor) | [Github](https://github.com/ttys026/json5-editor) | [Playground](https://ttys026.github.io/json5-editor/json5-editor)
 
 ![demo](https://github.com/ttys026/json5-editor/blob/master/demo.gif?raw=true)
 
