@@ -1,9 +1,9 @@
-import React, { useEffect, useRef } from 'react';
+import React, { memo, useEffect, useRef, useState } from 'react';
 import Editor from 'react-simple-code-editor';
-import { useControllableValue } from 'ahooks';
 import Prism, { highlight, languages } from 'prismjs';
 import { fillIndent, fillAfter } from './utils/fillPairs';
 import { registerPlugin } from './utils/matchBraces';
+import { nextTick } from './utils/nextTick';
 import './style.less';
 
 registerPlugin();
@@ -16,19 +16,26 @@ interface Props {
   className?: string;
 }
 
-export default (props: Props) => {
+export default memo((props: Props) => {
   const textAreaRef = useRef<HTMLTextAreaElement | null>(null);
-  const [code = '', setCode] = useControllableValue<string>(props, {
-    defaultValue: props.initialValue || '',
-  }) as [string, React.Dispatch<React.SetStateAction<string>>];
+  const [code = '', setCode] = useState<string>('');
 
   const codeRef = useRef(code);
   codeRef.current = code;
   useEffect(() => {
     codeRef.current = code;
+    if (props.onChange) {
+      props.onChange(code);
+    }
   }, [code]);
 
   useEffect(() => {
+    setCode(props.value || '');
+  }, [props.value]);
+
+  useEffect(() => {
+    // 设置初始值，不监听 initialValue 更新，只设置一次
+    setCode(props.initialValue || '');
     const textArea = textAreaRef.current!;
     const keyHandler = (ev: KeyboardEvent) => {
       if (ev.code === 'Enter' && !ev.isComposing) {
@@ -96,7 +103,7 @@ export default (props: Props) => {
             `${rowKey}: ${formattedValue},${comments ? ` ${comments}` : ''}` +
             `\n${Array(leadingWhiteSpace + 1).join(' ')}`;
           setCode(c => {
-            window.requestAnimationFrame(() => {
+            nextTick(() => {
               textArea?.setSelectionRange(
                 startPos + formattedProperty.length - currentLine.length,
                 startPos + formattedProperty.length - currentLine.length,
@@ -123,7 +130,7 @@ export default (props: Props) => {
           if ((codeRef.current || '')[startPos - 2] === ',') {
             ev.preventDefault();
             setCode(c => {
-              window.requestAnimationFrame(() => {
+              nextTick(() => {
                 textArea?.setSelectionRange(startPos + 3, startPos + 3);
               });
               return [
@@ -134,7 +141,7 @@ export default (props: Props) => {
               ].join('');
             });
           } else {
-            window.requestAnimationFrame(() => {
+            nextTick(() => {
               document.execCommand('insertText', false, ' ');
             });
           }
@@ -171,7 +178,6 @@ export default (props: Props) => {
         }}
         highlight={code => highlight(code, languages.js, 'JavaScript')}
         padding={8}
-        className={'match-braces'}
         style={{
           fontFamily: 'SFMono-Regular,Consolas,Liberation Mono,Menlo,monospace',
           fontSize: 14,
@@ -180,4 +186,4 @@ export default (props: Props) => {
       />
     </div>
   );
-};
+});
