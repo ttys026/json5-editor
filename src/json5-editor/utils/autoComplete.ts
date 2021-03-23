@@ -1,4 +1,4 @@
-export const fillIndent = (
+export const fillWithIndent = (
   textArea: HTMLTextAreaElement,
   needle: string,
   fill: string,
@@ -45,7 +45,7 @@ export const fillIndent = (
           prefix,
           `\n${Array(leadingWhiteSpace + 1).join(' ')}\n${Array(
             leadingWhiteSpace - 1,
-          ).join(' ')}${fill}`,
+          ).join(' ')}${fill}${leadingWhiteSpace === 2 ? '' : ','}`,
           suffix,
         ].join('');
       }
