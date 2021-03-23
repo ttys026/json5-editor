@@ -18,24 +18,25 @@ interface Props {
 
 export default memo((props: Props) => {
   const textAreaRef = useRef<HTMLTextAreaElement | null>(null);
-  const [code = '', setCode] = useState<string>('');
+  const [code, setCode] = useState<string>(props.initialValue || '');
+  const initialValueSet = useRef(false);
 
   const codeRef = useRef(code);
   codeRef.current = code;
+
   useEffect(() => {
     codeRef.current = code;
-    if (props.onChange) {
+    if (props.onChange && initialValueSet.current) {
       props.onChange(code);
     }
-  }, [code]);
+  }, [code, props.onChange]);
 
   useEffect(() => {
     setCode(props.value || '');
   }, [props.value]);
 
   useEffect(() => {
-    // 设置初始值，不监听 initialValue 更新，只设置一次
-    setCode(props.initialValue || '');
+    initialValueSet.current = true;
     const textArea = textAreaRef.current!;
     const keyHandler = (ev: KeyboardEvent) => {
       if (ev.code === 'Enter' && !ev.isComposing) {
