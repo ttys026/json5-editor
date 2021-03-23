@@ -24,7 +24,6 @@ export default memo((props: Props) => {
   const skipNextOnchange = useRef(true);
 
   const codeRef = useRef(code);
-  codeRef.current = code;
 
   useEffect(() => {
     setCode(value || '');
@@ -36,10 +35,10 @@ export default memo((props: Props) => {
   }, [code || '']);
 
   useEffect(() => {
-    codeRef.current = code;
-    if (onChange && !skipNextOnchange.current) {
+    if (onChange && !skipNextOnchange.current && code !== codeRef.current) {
       onChange(code);
     }
+    codeRef.current = code;
   }, [code, onChange]);
 
   useEffect(() => {
