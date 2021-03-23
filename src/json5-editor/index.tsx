@@ -1,8 +1,9 @@
 import React, { memo, useEffect, useRef, useState } from 'react';
 import Editor from 'react-simple-code-editor';
 import Prism, { highlight, languages } from 'prismjs';
-import { fillIndent, fillAfter } from './utils/fillPairs';
-import { registerPlugin } from './utils/matchBraces';
+
+import { fillWithIndent, fillAfter } from './utils/autoComplete';
+import { registerPlugin } from './utils/prism';
 import { nextTick } from './utils/nextTick';
 import useUpdateEffect from './hooks/useUpdateEffect';
 import './style.less';
@@ -26,12 +27,15 @@ export default memo((props: Props) => {
   const codeRef = useRef(code);
 
   useEffect(() => {
-    setCode(value || '');
+    if ('value' in props) {
+      setCode(value || '');
+    }
     skipNextOnchange.current = true;
   }, [value || '']);
 
   useUpdateEffect(() => {
     skipNextOnchange.current = false;
+    Prism.hooks.run('before-insert', {});
   }, [code || '']);
 
   useEffect(() => {
@@ -52,8 +56,8 @@ export default memo((props: Props) => {
           return;
         }
         const filled = [
-          fillIndent(textArea, '{', '}', codeRef.current, setCode, ev),
-          fillIndent(textArea, '[', ']', codeRef.current, setCode, ev),
+          fillWithIndent(textArea, '{', '}', codeRef.current, setCode, ev),
+          fillWithIndent(textArea, '[', ']', codeRef.current, setCode, ev),
         ];
         const prefixOfCursor = codeRef.current.slice(0, startPos);
         const newLineStartIndex = prefixOfCursor.lastIndexOf('\n') + 1;
@@ -99,7 +103,9 @@ export default memo((props: Props) => {
               !val.includes('"') &&
               !val.includes("'") &&
               val !== 'true' &&
-              val !== 'false'
+              val !== 'false' &&
+              val !== 'null' &&
+              val !== 'undefined'
             );
           };
           const formattedValue = needConvertValue(valueWithoutTrailingComma)
@@ -164,9 +170,23 @@ export default memo((props: Props) => {
         fillAfter(textArea, "'");
       }
     };
+    const blurHandler = (ev: FocusEvent) => {
+      // ev.persist();
+      // const startPos = textArea?.selectionStart || 0;
+      // const endPos = textArea?.selectionEnd || 0;
+      // console.log('ev', ev, startPos, endPos)
+      setCode(c =>
+        c
+          .split('\n')
+          .filter(ele => !ele.split('').every(ele => ele === ' '))
+          .join('\n'),
+      );
+    };
     textArea?.addEventListener('keydown', keyHandler);
+    textArea?.addEventListener('blur', blurHandler);
     return () => {
       textArea?.removeEventListener('keydown', keyHandler);
+      textArea?.removeEventListener('blur', blurHandler);
     };
   }, []);
 
@@ -176,11 +196,8 @@ export default memo((props: Props) => {
         ref={(r: any) => (textAreaRef.current = r?._input)}
         value={code}
         placeholder={props.placeholder}
-        onValueChange={e => {
-          setCode(e);
-          Prism.hooks.run('before-insert', {});
-        }}
-        highlight={code => highlight(code, languages.js, 'JavaScript')}
+        onValueChange={setCode}
+        highlight={code => highlight(code, languages.json5, 'json5')}
         padding={8}
         style={{
           fontFamily: 'SFMono-Regular,Consolas,Liberation Mono,Menlo,monospace',
