@@ -15,7 +15,7 @@ export default () => <Editor initialValue={`{\n  \n}`} />;
 ```tsx
 /**
  * debug: true
- * titile: work with antd form
+ * title: work with antd form
  */
 
 import React from 'react';
