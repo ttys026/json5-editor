@@ -1,7 +1,11 @@
 /* eslint-disable */
 import Prism from 'prismjs';
-import components from 'prismjs/components';
-import getLoader from 'prismjs/dependencies';
+
+// 参考 1：https://prismjs.com/test.html#language=json5 // inspect element to check deps and its order
+// 参考 2：https://prismjs.com/extending.html#resolving-dependencies
+import 'prismjs/components/prism-markup.min.js';
+import 'prismjs/components/prism-json.min.js';
+import 'prismjs/components/prism-json5.min.js';
 
 const getInnerContent = (str: string) => {
   if (str.startsWith('"') || str.startsWith("'")) {
@@ -11,13 +15,6 @@ const getInnerContent = (str: string) => {
 };
 
 export function registerPlugin() {
-  // 参考 1：https://prismjs.com/test.html#language=json5 // inspect element to check deps and its order
-  // 参考 2：https://prismjs.com/extending.html#resolving-dependencies
-  const loader = getLoader(components, ['markup', 'json', 'json5'], []);
-  loader.load((id: string) => {
-    require(`prismjs/components/prism-${id}.min.js`);
-  });
-
   let bracesCounter = 0;
   let parenthesesCounter = 0;
   let bracketsCounter = 0;
