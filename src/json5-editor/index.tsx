@@ -4,6 +4,7 @@ import Prism, { highlight, languages } from 'prismjs';
 import { fillIndent, fillAfter } from './utils/fillPairs';
 import { registerPlugin } from './utils/matchBraces';
 import { nextTick } from './utils/nextTick';
+import useUpdateEffect from './hooks/useUpdateEffect';
 import './style.less';
 
 registerPlugin();
@@ -19,29 +20,34 @@ interface Props {
 export default memo((props: Props) => {
   const textAreaRef = useRef<HTMLTextAreaElement | null>(null);
   const [code, setCode] = useState<string>(props.initialValue || '');
-  const initialValueSet = useRef(false);
+  const { value = '', onChange } = props;
+  const skipNextOnchange = useRef(true);
 
   const codeRef = useRef(code);
   codeRef.current = code;
 
   useEffect(() => {
+    setCode(value || '');
+    skipNextOnchange.current = true;
+  }, [value || '']);
+
+  useUpdateEffect(() => {
+    skipNextOnchange.current = false;
+  }, [code || '']);
+
+  useEffect(() => {
     codeRef.current = code;
-    if (props.onChange && initialValueSet.current) {
-      props.onChange(code);
+    if (onChange && !skipNextOnchange.current) {
+      onChange(code);
     }
-  }, [code, props.onChange]);
+  }, [code, onChange]);
 
   useEffect(() => {
-    setCode(props.value || '');
-  }, [props.value]);
-
-  useEffect(() => {
-    initialValueSet.current = true;
     const textArea = textAreaRef.current!;
     const keyHandler = (ev: KeyboardEvent) => {
+      const startPos = textArea?.selectionStart || 0;
+      const endPos = textArea?.selectionEnd || 0;
       if (ev.code === 'Enter' && !ev.isComposing) {
-        const startPos = textArea?.selectionStart || 0;
-        const endPos = textArea?.selectionEnd || 0;
         // 如果选中了文字，则不做特殊处理
         if (startPos !== endPos) {
           return;
@@ -122,8 +128,6 @@ export default memo((props: Props) => {
       }
 
       if (ev.code === 'Slash') {
-        const startPos = textArea?.selectionStart || 0;
-        const endPos = textArea?.selectionEnd || 0;
         if (
           startPos === endPos &&
           (codeRef.current || '')[startPos - 1] === '/'
