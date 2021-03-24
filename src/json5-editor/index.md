@@ -27,7 +27,28 @@ export default () => {
   return (
     <Form
       onValuesChange={console.log}
-      initialValues={{ code: `{\n  name: 1,\n  name: 2\n}` }}
+      initialValues={{
+        code: `{
+  array: [
+    [
+      {
+        name: 1
+      },
+      {
+        name: 2
+      },
+    ],
+    [
+      {
+        name: 3
+      },
+      {
+        name: 4
+      },
+    ],
+  ],
+}`,
+      }}
       form={form}
     >
       <Form.Item name="code">

@@ -14,7 +14,13 @@ const getInnerContent = (str: string) => {
   return str;
 };
 
+let registered = false;
+
 export function registerPlugin() {
+  // skip hot module reload
+  if ((module as any).hot && registered) {
+    return;
+  }
   let bracesCounter = 0;
   let parenthesesCounter = 0;
   let bracketsCounter = 0;
@@ -22,16 +28,32 @@ export function registerPlugin() {
 
   Prism.hooks.add('after-tokenize', function(env) {
     let lastProperty = 'root';
-    let prefix = [];
+    let prefix: Array<string | number> = [];
     for (let i = 0; i < (env.tokens?.length || 0); i++) {
       if (env.tokens[i].content === '{') {
         prefix.push(lastProperty);
       }
+      if (env.tokens[i].content === '[') {
+        prefix.push(0);
+      }
       if (env.tokens[i].content === '}') {
         prefix.pop();
+        const last = prefix.pop();
+        if (typeof last === 'number') {
+          prefix.push(last + 1);
+        }
+      }
+      if (env.tokens[i].content === ']') {
+        prefix.pop();
+        const last = prefix.pop();
+        if (typeof last === 'number') {
+          prefix.push(last + 1);
+        }
       }
       if (env.tokens[i].type === 'property') {
+        prefix.pop();
         lastProperty = getInnerContent(env.tokens[i].content);
+        prefix.push(lastProperty);
         env.tokens[i].alias = `${env.tokens[i].alias || ''} ${prefix.join(
           '-',
         )}`.trim();
@@ -84,4 +106,5 @@ export function registerPlugin() {
       env.classes.push(`brackets-end-${--bracketsCounter}`);
     }
   });
+  registered = true;
 }
