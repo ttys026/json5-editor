@@ -25,6 +25,7 @@
       "prettier --parser=typescript --write"
     ]
   },
+  "license" : "MIT",
   "dependencies": {
     "prismjs": "^1.23.0",
     "react": "^16.12.0",
