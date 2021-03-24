@@ -34,8 +34,8 @@ export default memo((props: Props) => {
   }, [value || '']);
 
   useUpdateEffect(() => {
-    skipNextOnchange.current = false;
     Prism.hooks.run('before-insert', {});
+    skipNextOnchange.current = false;
   }, [code || '']);
 
   useEffect(() => {
@@ -171,10 +171,6 @@ export default memo((props: Props) => {
       }
     };
     const blurHandler = (ev: FocusEvent) => {
-      // ev.persist();
-      // const startPos = textArea?.selectionStart || 0;
-      // const endPos = textArea?.selectionEnd || 0;
-      // console.log('ev', ev, startPos, endPos)
       setCode(c =>
         c
           .split('\n')
@@ -197,7 +193,12 @@ export default memo((props: Props) => {
         value={code}
         placeholder={props.placeholder}
         onValueChange={setCode}
-        highlight={code => highlight(code, languages.json5, 'json5')}
+        highlight={code => {
+          setTimeout(() => {
+            Prism.hooks.run('before-insert', {});
+          });
+          return highlight(code, languages.json5, 'json5');
+        }}
         padding={8}
         style={{
           fontFamily: 'SFMono-Regular,Consolas,Liberation Mono,Menlo,monospace',
