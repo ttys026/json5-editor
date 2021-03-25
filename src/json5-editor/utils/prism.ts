@@ -14,19 +14,28 @@ const getInnerContent = (str: string) => {
   return str;
 };
 
-let registered = false;
-
-export function registerPlugin() {
-  // skip hot module reload
-  if ((module as any).hot && registered) {
-    return;
+export const editorCacheMap = new Map<
+  symbol,
+  {
+    bracesCounter: number;
+    parenthesesCounter: number;
+    bracketsCounter: number;
+    cache: string[];
   }
-  let bracesCounter = 0;
-  let parenthesesCounter = 0;
-  let bracketsCounter = 0;
-  let cache: string[] = [];
+>();
+
+export function registerPlugin(uid: symbol) {
+  editorCacheMap.set(uid, {
+    bracesCounter: 0,
+    parenthesesCounter: 0,
+    bracketsCounter: 0,
+    cache: [],
+  });
 
   Prism.hooks.add('after-tokenize', function(env) {
+    if (((env.language as unknown) as symbol) !== uid) {
+      return;
+    }
     let lastProperty = 'root';
     let prefix: Array<string | number> = [];
     for (let i = 0; i < (env.tokens?.length || 0); i++) {
@@ -62,13 +71,24 @@ export function registerPlugin() {
   });
 
   Prism.hooks.add('before-insert', () => {
-    bracesCounter = 0;
-    parenthesesCounter = 0;
-    bracketsCounter = 0;
-    cache = [];
+    editorCacheMap.set(uid, {
+      bracesCounter: 0,
+      parenthesesCounter: 0,
+      bracketsCounter: 0,
+      cache: [],
+    });
   });
 
   Prism.hooks.add('wrap', env => {
+    if (((env.language as unknown) as symbol) !== uid) {
+      return;
+    }
+    let {
+      cache,
+      bracesCounter,
+      parenthesesCounter,
+      bracketsCounter,
+    } = editorCacheMap.get(uid)!;
     if (env.type === 'property') {
       const extraClassList = env.classes[2].split(' ');
       const objectPath = extraClassList[extraClassList.length - 1];
@@ -106,5 +126,4 @@ export function registerPlugin() {
       env.classes.push(`brackets-end-${--bracketsCounter}`);
     }
   });
-  registered = true;
 }

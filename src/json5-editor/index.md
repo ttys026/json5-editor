@@ -64,3 +64,74 @@ export default () => {
   );
 };
 ```
+
+```tsx
+/**
+ * debug: true
+ * title: multiple editor
+ */
+
+import React from 'react';
+import { Editor } from 'json5-editor';
+
+export default () => {
+  return (
+    <>
+      <Editor
+        value={`{
+  success: true,
+  data: {
+    user: {
+      name: "Troy",
+      age: 25, // born in 1996
+      key: "value",
+      phoneNumber: 13800000000 // 11 digits in number format
+    },
+  },
+  success: false
+}`}
+      />
+      <Editor
+        value={`{
+  "type": "object",
+  "description": "",
+  "properties": {
+    "success": {
+      "type": "boolean",
+      "description": ""
+    },
+    "data": {
+      "type": "object",
+      "description": "",
+      "properties": {
+        "user": {
+          "type": "object",
+          "description": "",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": ""
+            },
+            "age": {
+              "type": "number",
+              "description": "born in 1996"
+            },
+            "key": {
+              "type": "string",
+              "description": ""
+            },
+            "phoneNumber": {
+              "type": "number",
+              "description": "11 digits in number format"
+            }
+          }
+        }
+      }
+    }
+  }
+}`}
+      />
+    </>
+  );
+};
+```

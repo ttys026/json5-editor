@@ -12,12 +12,10 @@ import Prism, { highlight, languages } from 'prismjs';
 
 import { fillWithIndent, fillAfter } from './utils/autoComplete';
 import { activePairs, clearPairs } from './utils/match';
-import { registerPlugin } from './utils/prism';
+import { registerPlugin, editorCacheMap } from './utils/prism';
 import { nextTick } from './utils/nextTick';
 import useUpdateEffect from './hooks/useUpdateEffect';
 import './style.less';
-
-registerPlugin();
 interface Props {
   initialValue?: string;
   value?: string;
@@ -41,6 +39,8 @@ export default memo(
     const [code, setCode] = useState<string>(props.initialValue || '');
     const { value = '', onChange } = props;
     const skipNextOnchange = useRef(true);
+    // 支持多例，隔离 prism hook 间影响
+    const editorUid = useRef(Symbol());
 
     const codeRef = useRef(code);
 
@@ -71,6 +71,7 @@ export default memo(
     }, [code, onChange]);
 
     useEffect(() => {
+      registerPlugin(editorUid.current);
       const textArea = textAreaRef.current!;
       const keyDownHandler = (ev: KeyboardEvent) => {
         const startPos = textArea?.selectionStart || 0;
@@ -234,6 +235,7 @@ export default memo(
       textArea?.addEventListener('keyup', cursorChangeHanlder);
       textArea?.addEventListener('click', cursorChangeHanlder);
       return () => {
+        editorCacheMap.delete(editorUid.current);
         textArea?.removeEventListener('keydown', keyDownHandler);
         textArea?.removeEventListener('blur', blurHandler);
         textArea?.removeEventListener('keyup', cursorChangeHanlder);
@@ -256,7 +258,12 @@ export default memo(
             setTimeout(() => {
               Prism.hooks.run('before-insert', {});
             });
-            return highlight(code, languages.json5, 'json5');
+            // HACK: highlight 的 ts 类型是 string，但传递 symbol 作为 editor 的唯一 id，此处 cast 为一个错误类型，但是有意为之
+            return highlight(
+              code,
+              languages.json5,
+              (editorUid.current as unknown) as string,
+            );
           }}
           padding={8}
           style={{
