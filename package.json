@@ -1,6 +1,6 @@
 {
   "name": "json5-editor",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "scripts": {
     "start": "dumi dev",
     "docs:build": "dumi build",
@@ -25,7 +25,7 @@
       "prettier --parser=typescript --write"
     ]
   },
-  "license" : "MIT",
+  "license": "MIT",
   "dependencies": {
     "prismjs": "^1.23.0",
     "react": "^16.12.0",
