@@ -1,3 +1,28 @@
+// helper function that cast childNode as span;
+const getSpan = (list: NodeListOf<ChildNode>, index: number) => {
+  return list[index] as HTMLSpanElement;
+};
+
+const isStart = (ele: HTMLSpanElement) => {
+  return ele.className.includes('brace-start');
+};
+
+const getBraceType = (brace: string) => {
+  switch (brace) {
+    case '{':
+    case '}':
+      return 'brace';
+    case '[':
+    case ']':
+      return 'bracket';
+    case '(':
+    case ')':
+      return 'parentheses';
+    default:
+      return '';
+  }
+};
+
 export const activePairs = (
   preElement: HTMLPreElement,
   currentIndex: number,
@@ -5,33 +30,83 @@ export const activePairs = (
   setTimeout(() => {
     let accCount = 0;
     const children = preElement.childNodes || [];
+    const punctuations = preElement.querySelectorAll('.brace');
+    let pair: HTMLSpanElement[] = [];
+    let pairIndex = 0;
 
-    for (let i = 0; i < children.length; i++) {
-      const ele = children[i];
-      if ((ele as HTMLDivElement).innerText) {
-        accCount += (ele as HTMLDivElement).innerText.length;
+    outer: for (let i = 0; i < children.length; i++) {
+      const ele = getSpan(children, i);
+      if (ele.innerText) {
+        accCount += ele.innerText.length;
       } else if (((ele as unknown) as { data: string }).data) {
         accCount += ((ele as unknown) as { data: string }).data.length;
       }
       if (accCount >= currentIndex) {
         try {
-          if ((ele as HTMLDivElement).className) {
-            const classNameList = (ele as HTMLDivElement).className.split(' ');
-            const lastClassName = classNameList[classNameList.length - 1];
-            const list = lastClassName.split('-');
-            preElement
-              .querySelector(`.${list[0]}-start-${list[2]}`)
-              ?.classList.add('active');
-            preElement
-              .querySelector(`.${list[0]}-end-${list[2]}`)
-              ?.classList.add('active');
-            break;
+          for (let j = 0; j < punctuations.length; j++) {
+            if (ele.isSameNode(punctuations[j])) {
+              if (isStart(ele)) {
+                pair[0] = ele;
+              } else {
+                pair[1] = ele;
+              }
+              pairIndex = j;
+              break outer;
+            }
           }
         } catch (e) {
           // do nothing
         }
       }
     }
+
+    let level = 0;
+    // 选中了 start
+    if (pair[0]) {
+      for (let i = pairIndex; i < punctuations.length; i++) {
+        const currentElement = getSpan(punctuations, i);
+        if (
+          getBraceType(currentElement.innerText) !==
+          getBraceType(pair[0].innerText)
+        ) {
+          continue;
+        }
+        if (isStart(currentElement)) {
+          level += 1;
+        } else {
+          level -= 1;
+        }
+
+        if (level === 0) {
+          pair[1] = currentElement;
+          break;
+        }
+      }
+    }
+    // 选中了 end
+    else if (pair[1]) {
+      for (let i = pairIndex; i >= 0; i--) {
+        const currentElement = getSpan(punctuations, i);
+        if (
+          getBraceType(currentElement.innerText) !==
+          getBraceType(pair[1].innerText)
+        ) {
+          continue;
+        }
+        if (isStart(currentElement)) {
+          level += 1;
+        } else {
+          level -= 1;
+        }
+
+        if (level === 0) {
+          pair[0] = currentElement;
+          break;
+        }
+      }
+    }
+
+    pair.forEach(ele => ele.classList.add('active'));
   });
 };
 

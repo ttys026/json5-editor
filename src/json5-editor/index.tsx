@@ -4,6 +4,7 @@ import React, {
   Ref,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -12,7 +13,7 @@ import Prism, { highlight, languages } from 'prismjs';
 
 import { fillWithIndent, fillAfter } from './utils/autoComplete';
 import { activePairs, clearPairs } from './utils/match';
-import { registerPlugin, editorCacheMap } from './utils/prism';
+import { registerPlugin, unRegisterPlugin } from './utils/prism';
 import { nextTick } from './utils/nextTick';
 import useUpdateEffect from './hooks/useUpdateEffect';
 import './style.less';
@@ -51,6 +52,11 @@ export default memo(
       onChange: setCode,
     }));
 
+    useMemo(() => {
+      // 确保首次调用 highligh 时就能触发 hook
+      registerPlugin(editorUid.current);
+    }, []);
+
     useEffect(() => {
       if ('value' in props) {
         setCode(value || '');
@@ -71,7 +77,6 @@ export default memo(
     }, [code, onChange]);
 
     useEffect(() => {
-      registerPlugin(editorUid.current);
       const textArea = textAreaRef.current!;
       const keyDownHandler = (ev: KeyboardEvent) => {
         const startPos = textArea?.selectionStart || 0;
@@ -195,6 +200,7 @@ export default memo(
         }
       };
       const blurHandler = (ev: FocusEvent) => {
+        clearPairs(preElementRef.current!);
         setCode(c =>
           c
             .split('\n')
@@ -209,23 +215,10 @@ export default memo(
           return;
         }
         clearPairs(preElementRef.current!);
-        if (
-          codeRef.current[startPos] === '{' ||
-          codeRef.current[startPos] === '}' ||
-          codeRef.current[startPos] === ']' ||
-          codeRef.current[startPos] === '[' ||
-          codeRef.current[startPos] === '(' ||
-          codeRef.current[startPos] === ')'
-        ) {
+        const braceList = ['{', '}', '[', ']', '(', ')'];
+        if (braceList.includes(codeRef.current[startPos])) {
           activePairs(preElementRef.current!, startPos);
-        } else if (
-          codeRef.current[startPos - 1] === '{' ||
-          codeRef.current[startPos - 1] === '}' ||
-          codeRef.current[startPos - 1] === ']' ||
-          codeRef.current[startPos - 1] === '[' ||
-          codeRef.current[startPos - 1] === ')' ||
-          codeRef.current[startPos - 1] === '('
-        ) {
+        } else if (braceList.includes(codeRef.current[startPos - 1])) {
           activePairs(preElementRef.current!, startPos - 1);
         }
       };
@@ -235,7 +228,8 @@ export default memo(
       textArea?.addEventListener('keyup', cursorChangeHanlder);
       textArea?.addEventListener('click', cursorChangeHanlder);
       return () => {
-        editorCacheMap.delete(editorUid.current);
+        // 卸载 hook
+        unRegisterPlugin(editorUid.current);
         textArea?.removeEventListener('keydown', keyDownHandler);
         textArea?.removeEventListener('blur', blurHandler);
         textArea?.removeEventListener('keyup', cursorChangeHanlder);
@@ -270,6 +264,7 @@ export default memo(
             fontFamily:
               'SFMono-Regular,Consolas,Liberation Mono,Menlo,monospace',
             fontSize: 14,
+            lineHeight: 1.5,
             ...props.style,
           }}
         />

@@ -1,5 +1,5 @@
 /* eslint-disable */
-import Prism from 'prismjs';
+import Prism, { hooks, Environment } from 'prismjs';
 
 // 参考 1：https://prismjs.com/test.html#language=json5 // inspect element to check deps and its order
 // 参考 2：https://prismjs.com/extending.html#resolving-dependencies
@@ -14,24 +14,18 @@ const getInnerContent = (str: string) => {
   return str;
 };
 
-export const editorCacheMap = new Map<
-  symbol,
-  {
-    bracesCounter: number;
-    parenthesesCounter: number;
-    bracketsCounter: number;
-    cache: string[];
-  }
->();
+interface EditorState {
+  cache: string[];
+}
+
+const editorCacheMap = new Map<symbol, EditorState>();
 
 export function registerPlugin(uid: symbol) {
   editorCacheMap.set(uid, {
-    bracesCounter: 0,
-    parenthesesCounter: 0,
-    bracketsCounter: 0,
     cache: [],
   });
 
+  // object path
   Prism.hooks.add('after-tokenize', function(env) {
     if (((env.language as unknown) as symbol) !== uid) {
       return;
@@ -60,7 +54,10 @@ export function registerPlugin(uid: symbol) {
         }
       }
       if (env.tokens[i].type === 'property') {
-        prefix.pop();
+        const last = prefix.pop();
+        if (typeof last === 'number') {
+          prefix.push(last);
+        }
         lastProperty = getInnerContent(env.tokens[i].content);
         prefix.push(lastProperty);
         env.tokens[i].alias = `${env.tokens[i].alias || ''} ${prefix.join(
@@ -72,23 +69,16 @@ export function registerPlugin(uid: symbol) {
 
   Prism.hooks.add('before-insert', () => {
     editorCacheMap.set(uid, {
-      bracesCounter: 0,
-      parenthesesCounter: 0,
-      bracketsCounter: 0,
       cache: [],
     });
   });
 
+  // exist property
   Prism.hooks.add('wrap', env => {
     if (((env.language as unknown) as symbol) !== uid) {
       return;
     }
-    let {
-      cache,
-      bracesCounter,
-      parenthesesCounter,
-      bracketsCounter,
-    } = editorCacheMap.get(uid)!;
+    let { cache } = editorCacheMap.get(uid)!;
     if (env.type === 'property') {
       const extraClassList = env.classes[2].split(' ');
       const objectPath = extraClassList[extraClassList.length - 1];
@@ -99,31 +89,15 @@ export function registerPlugin(uid: symbol) {
       }
     }
 
-    if (env.content === '{') {
-      env.classes.length === 3 && env.classes.pop();
-      env.classes.push(`braces-start-${bracesCounter}`);
-      bracesCounter += 1;
+    if (['{', '(', '['].includes(env.content)) {
+      env.classes.push('brace', 'brace-start');
     }
-    if (env.content === '(') {
-      env.classes.length === 3 && env.classes.pop();
-      env.classes.push(`parentheses-start-${parenthesesCounter++}`);
-    }
-    if (env.content === '[') {
-      env.classes.length === 3 && env.classes.pop();
-      env.classes.push(`brackets-start-${bracketsCounter++}`);
-    }
-    if (env.content === '}') {
-      env.classes.length === 3 && env.classes.pop();
-      bracesCounter -= 1;
-      env.classes.push(`braces-end-${bracesCounter}`);
-    }
-    if (env.content === ')') {
-      env.classes.length === 3 && env.classes.pop();
-      env.classes.push(`parentheses-end-${--parenthesesCounter}`);
-    }
-    if (env.content === ']') {
-      env.classes.length === 3 && env.classes.pop();
-      env.classes.push(`brackets-end-${--bracketsCounter}`);
+    if (['}', ')', ']'].includes(env.content)) {
+      env.classes.push('brace', 'brace-end');
     }
   });
+}
+
+export function unRegisterPlugin(uid: symbol) {
+  editorCacheMap.delete(uid);
 }
