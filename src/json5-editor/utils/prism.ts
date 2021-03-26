@@ -18,6 +18,12 @@ interface EditorState {
   cache: string[];
 }
 
+const getLanguageAsSymbol = (
+  env: hooks.RequiredEnvironment<'language', Environment>,
+) => {
+  return (env.language as unknown) as symbol;
+};
+
 const editorCacheMap = new Map<symbol, EditorState>();
 
 export function registerPlugin(uid: symbol) {
@@ -25,77 +31,73 @@ export function registerPlugin(uid: symbol) {
     cache: [],
   });
 
-  // object path
-  Prism.hooks.add('after-tokenize', function(env) {
-    if (((env.language as unknown) as symbol) !== uid) {
-      return;
-    }
-    let lastProperty = 'root';
-    let prefix: Array<string | number> = [];
-    for (let i = 0; i < (env.tokens?.length || 0); i++) {
-      if (env.tokens[i].content === '{') {
-        prefix.push(lastProperty);
-      }
-      if (env.tokens[i].content === '[') {
-        prefix.push(0);
-      }
-      if (env.tokens[i].content === '}') {
-        prefix.pop();
-        const last = prefix.pop();
-        if (typeof last === 'number') {
-          prefix.push(last + 1);
+  // before-insert is a self registered hook that can determine first time registration
+  if (!((Prism.hooks.all || {})['before-insert'] || []).length) {
+    Prism.hooks.add('after-tokenize', function(env) {
+      let lastProperty = 'root';
+      let prefix: Array<string | number> = [];
+      for (let i = 0; i < (env.tokens?.length || 0); i++) {
+        if (env.tokens[i].content === '{') {
+          prefix.push(lastProperty);
+        }
+        if (env.tokens[i].content === '[') {
+          prefix.push(0);
+        }
+        if (env.tokens[i].content === '}') {
+          prefix.pop();
+          const last = prefix.pop();
+          if (typeof last === 'number') {
+            prefix.push(last + 1);
+          }
+        }
+        if (env.tokens[i].content === ']') {
+          prefix.pop();
+          const last = prefix.pop();
+          if (typeof last === 'number') {
+            prefix.push(last + 1);
+          }
+        }
+        if (env.tokens[i].type === 'property') {
+          const last = prefix.pop();
+          if (typeof last === 'number') {
+            prefix.push(last);
+          }
+          lastProperty = getInnerContent(env.tokens[i].content);
+          prefix.push(lastProperty);
+          env.tokens[i].alias = `${env.tokens[i].alias || ''} ${prefix.join(
+            '-',
+          )}`.trim();
         }
       }
-      if (env.tokens[i].content === ']') {
-        prefix.pop();
-        const last = prefix.pop();
-        if (typeof last === 'number') {
-          prefix.push(last + 1);
-        }
-      }
-      if (env.tokens[i].type === 'property') {
-        const last = prefix.pop();
-        if (typeof last === 'number') {
-          prefix.push(last);
-        }
-        lastProperty = getInnerContent(env.tokens[i].content);
-        prefix.push(lastProperty);
-        env.tokens[i].alias = `${env.tokens[i].alias || ''} ${prefix.join(
-          '-',
-        )}`.trim();
-      }
-    }
-  });
-
-  Prism.hooks.add('before-insert', () => {
-    editorCacheMap.set(uid, {
-      cache: [],
     });
-  });
 
-  // exist property
-  Prism.hooks.add('wrap', env => {
-    if (((env.language as unknown) as symbol) !== uid) {
-      return;
-    }
-    let { cache } = editorCacheMap.get(uid)!;
-    if (env.type === 'property') {
-      const extraClassList = env.classes[2].split(' ');
-      const objectPath = extraClassList[extraClassList.length - 1];
-      if (cache.includes(`${getInnerContent(env.content)}-${objectPath}`)) {
-        env.classes.push('exist-property');
-      } else {
-        cache.push(`${getInnerContent(env.content)}-${objectPath}`);
+    Prism.hooks.add('before-insert', env => {
+      editorCacheMap.set(getLanguageAsSymbol(env), {
+        cache: [],
+      });
+    });
+
+    // exist property
+    Prism.hooks.add('wrap', env => {
+      let { cache } = editorCacheMap.get(getLanguageAsSymbol(env))!;
+      if (env.type === 'property') {
+        const extraClassList = env.classes[2].split(' ');
+        const objectPath = extraClassList[extraClassList.length - 1];
+        if (cache.includes(`${getInnerContent(env.content)}-${objectPath}`)) {
+          env.classes.push('exist-property');
+        } else {
+          cache.push(`${getInnerContent(env.content)}-${objectPath}`);
+        }
       }
-    }
 
-    if (['{', '(', '['].includes(env.content)) {
-      env.classes.push('brace', 'brace-start');
-    }
-    if (['}', ')', ']'].includes(env.content)) {
-      env.classes.push('brace', 'brace-end');
-    }
-  });
+      if (['{', '(', '['].includes(env.content)) {
+        env.classes.push('brace', 'brace-start');
+      }
+      if (['}', ')', ']'].includes(env.content)) {
+        env.classes.push('brace', 'brace-end');
+      }
+    });
+  }
 }
 
 export function unRegisterPlugin(uid: symbol) {

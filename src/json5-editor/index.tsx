@@ -65,7 +65,10 @@ export default memo(
     }, [value || '']);
 
     useUpdateEffect(() => {
-      Prism.hooks.run('before-insert', {});
+      // cast to wrong type to keep each editor unique
+      Prism.hooks.run('before-insert', {
+        language: (editorUid.current as unknown) as string,
+      });
       skipNextOnchange.current = false;
     }, [code || '']);
 
@@ -250,7 +253,10 @@ export default memo(
           onValueChange={setCode}
           highlight={code => {
             setTimeout(() => {
-              Prism.hooks.run('before-insert', {});
+              // cast to wrong type to keep each editor unique
+              Prism.hooks.run('before-insert', {
+                language: editorUid.current as any,
+              });
             });
             // HACK: highlight 的 ts 类型是 string，但传递 symbol 作为 editor 的唯一 id，此处 cast 为一个错误类型，但是有意为之
             return highlight(
