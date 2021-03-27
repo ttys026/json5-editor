@@ -33,6 +33,10 @@ export function registerPlugin(uid: symbol) {
 
   // before-insert is a self registered hook that can determine first time registration
   if (!((Prism.hooks.all || {})['before-insert'] || []).length) {
+    Prism.hooks.add('before-tokenize', env => {
+      env.grammar.indent = /[ ]{2}/;
+    });
+
     Prism.hooks.add('after-tokenize', function(env) {
       let lastProperty = 'root';
       let prefix: Array<string | number> = [];

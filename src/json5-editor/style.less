@@ -29,6 +29,14 @@
   .token.punctuation.active {
     outline: 1px solid rgba(0, 0, 0, 0.25);
   }
+  .token.indent {
+    &::after {
+      position: absolute;
+      content: url("data:image/svg+xml;utf-8,<svg xmlns='http://www.w3.org/2000/svg' width='21' height='21'><line stroke='rgba(0,0,0,0.2)' x1='0' y1='0' x2='0' y2='21'></line></svg>");
+      color: rgba(0, 0, 0, 0.1);
+      transform: translate(-9px, 0);
+    }
+  }
   .token.string {
     color: #690;
   }

@@ -17,6 +17,9 @@ import { registerPlugin, unRegisterPlugin } from './utils/prism';
 import { nextTick } from './utils/nextTick';
 import useUpdateEffect from './hooks/useUpdateEffect';
 import './style.less';
+import prettier from 'prettier/standalone';
+import parserBabel from './utils/parser-babel';
+
 interface Props {
   initialValue?: string;
   value?: string;
@@ -204,12 +207,23 @@ export default memo(
       };
       const blurHandler = (ev: FocusEvent) => {
         clearPairs(preElementRef.current!);
-        setCode(c =>
-          c
-            .split('\n')
-            .filter(ele => !ele.split('').every(ele => ele === ' '))
-            .join('\n'),
-        );
+        try {
+          const formatted = prettier.format(codeRef.current, {
+            parser: 'json5',
+            plugins: [parserBabel as any],
+          });
+          setCode(
+            formatted
+              .split('\n')
+              .filter(ele => !ele.split('').every(ele => ele === ' '))
+              .join('\n'),
+          );
+        } catch (e) {
+          // don't format
+          if (process.env.NODE_ENV === 'development') {
+            console.log(e);
+          }
+        }
       };
       const cursorChangeHanlder = () => {
         const startPos = textArea?.selectionStart || 0;
@@ -218,11 +232,16 @@ export default memo(
           return;
         }
         clearPairs(preElementRef.current!);
-        const braceList = ['{', '}', '[', ']', '(', ')'];
-        if (braceList.includes(codeRef.current[startPos])) {
+        const startList = ['{', '[', '('];
+        const endList = ['}', ']', ')'];
+        if (startList.includes(codeRef.current[startPos])) {
           activePairs(preElementRef.current!, startPos);
-        } else if (braceList.includes(codeRef.current[startPos - 1])) {
+        } else if (startList.includes(codeRef.current[startPos - 1])) {
           activePairs(preElementRef.current!, startPos - 1);
+        } else if (endList.includes(codeRef.current[endPos - 1])) {
+          activePairs(preElementRef.current!, endPos - 1);
+        } else if (endList.includes(codeRef.current[endPos])) {
+          activePairs(preElementRef.current!, endPos);
         }
       };
 

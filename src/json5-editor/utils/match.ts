@@ -41,7 +41,7 @@ export const activePairs = (
       } else if (((ele as unknown) as { data: string }).data) {
         accCount += ((ele as unknown) as { data: string }).data.length;
       }
-      if (accCount >= currentIndex) {
+      if (accCount > currentIndex) {
         try {
           for (let j = 0; j < punctuations.length; j++) {
             if (ele.isSameNode(punctuations[j])) {
