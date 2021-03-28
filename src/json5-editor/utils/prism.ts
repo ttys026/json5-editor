@@ -1,5 +1,5 @@
 /* eslint-disable */
-import Prism, { hooks, Environment } from 'prismjs';
+import Prism, { hooks, Environment, Token } from 'prismjs';
 
 // 参考 1：https://prismjs.com/test.html#language=json5 // inspect element to check deps and its order
 // 参考 2：https://prismjs.com/extending.html#resolving-dependencies
@@ -16,6 +16,7 @@ const getInnerContent = (str: string) => {
 
 interface EditorState {
   cache: string[];
+  latestTokens: Token[];
 }
 
 const getLanguageAsSymbol = (
@@ -24,11 +25,25 @@ const getLanguageAsSymbol = (
   return (env.language as unknown) as symbol;
 };
 
+const cacheTokens = (uid: symbol, tokens: Token[]) => {
+  setTimeout(() => {
+    editorCacheMap.set(uid, {
+      cache: editorCacheMap.get(uid)?.cache || [],
+      latestTokens: tokens,
+    });
+  });
+};
+
+export const getTokens = (uid: symbol) => {
+  return editorCacheMap.get(uid)?.latestTokens;
+};
+
 const editorCacheMap = new Map<symbol, EditorState>();
 
 export function registerPlugin(uid: symbol) {
   editorCacheMap.set(uid, {
     cache: [],
+    latestTokens: [],
   });
 
   // before-insert is a self registered hook that can determine first time registration
@@ -40,6 +55,7 @@ export function registerPlugin(uid: symbol) {
     Prism.hooks.add('after-tokenize', function(env) {
       let lastProperty = 'root';
       let prefix: Array<string | number> = [];
+      cacheTokens(getLanguageAsSymbol(env), env.tokens);
       for (let i = 0; i < (env.tokens?.length || 0); i++) {
         if (env.tokens[i].content === '{') {
           prefix.push(lastProperty);
@@ -78,6 +94,7 @@ export function registerPlugin(uid: symbol) {
     Prism.hooks.add('before-insert', env => {
       editorCacheMap.set(getLanguageAsSymbol(env), {
         cache: [],
+        latestTokens: [],
       });
     });
 

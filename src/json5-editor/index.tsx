@@ -9,11 +9,11 @@ import React, {
   useState,
 } from 'react';
 import Editor from 'react-simple-code-editor';
-import Prism, { highlight, languages } from 'prismjs';
+import Prism, { highlight, languages, Token } from 'prismjs';
 
 import { fillWithIndent, fillAfter } from './utils/autoComplete';
 import { activePairs, clearPairs } from './utils/match';
-import { registerPlugin, unRegisterPlugin } from './utils/prism';
+import { getTokens, registerPlugin, unRegisterPlugin } from './utils/prism';
 import { nextTick } from './utils/nextTick';
 import useUpdateEffect from './hooks/useUpdateEffect';
 import './style.less';
@@ -84,6 +84,7 @@ export default memo(
 
     useEffect(() => {
       const textArea = textAreaRef.current!;
+      // special char key down
       const keyDownHandler = (ev: KeyboardEvent) => {
         const startPos = textArea?.selectionStart || 0;
         const endPos = textArea?.selectionEnd || 0;
@@ -205,26 +206,77 @@ export default memo(
           fillAfter(textArea, "'");
         }
       };
-      const blurHandler = (ev: FocusEvent) => {
+      // format on blue
+      const blurHandler = () => {
         clearPairs(preElementRef.current!);
+
+        const prevTokens = getTokens(editorUid.current);
+
+        const getFormattedLine = (
+          queue: Token[],
+          value: string,
+          index: number,
+        ) => {
+          const trimed = value.trim();
+          const next = queue[index + 1];
+          if (next?.type === 'comment' && trimed) {
+            return `"${trimed}",`;
+          }
+          if (trimed) {
+            return `"${trimed}",\n`;
+          }
+          return value;
+        };
+
+        const tokens =
+          prevTokens?.reduce<Token[]>((acc, ele) => {
+            const prev = acc[acc.length - 1];
+            if (
+              prev?.type === 'number' &&
+              typeof ele === 'string' &&
+              (ele as string).trim()
+            ) {
+              return [
+                ...acc.slice(0, acc.length - 1),
+                (`${prev.content}${ele}` as unknown) as Token,
+              ];
+            }
+            return [...acc, ele];
+          }, []) || [];
+
+        const tokenGeneratedCode = tokens
+          .map((ele, index) =>
+            typeof ele === 'string'
+              ? `${getFormattedLine(tokens, ele, index)}`
+              : ele.content,
+          )
+          .join('');
+
+        let formatted = tokenGeneratedCode;
         try {
-          const formatted = prettier.format(codeRef.current, {
+          formatted = prettier.format(formatted!, {
             parser: 'json5',
+            quoteProps: 'preserve',
+            bracketSpacing: true,
             plugins: [parserBabel as any],
           });
-          setCode(
-            formatted
-              .split('\n')
-              .filter(ele => !ele.split('').every(ele => ele === ' '))
-              .join('\n'),
-          );
         } catch (e) {
           // don't format
           if (process.env.NODE_ENV === 'development') {
             console.log(e);
           }
         }
+        const emptyLinesRemoved = formatted!
+          .split('\n')
+          .filter(ele => !ele.split('').every(ele => ele === ' '))
+          .join('\n');
+        setCode(
+          emptyLinesRemoved.endsWith(',')
+            ? emptyLinesRemoved.slice(0, emptyLinesRemoved.length - 1)
+            : emptyLinesRemoved,
+        );
       };
+      // highlight active braces
       const cursorChangeHanlder = () => {
         const startPos = textArea?.selectionStart || 0;
         const endPos = textArea?.selectionEnd || 0;
