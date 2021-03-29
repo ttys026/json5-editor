@@ -71,14 +71,11 @@ export default () => {
  * title: multiple editor
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Editor } from 'json5-editor';
 
 export default () => {
-  return (
-    <>
-      <Editor
-        value={`{
+  const [value, setValue] = useState(`{
   success: true,
   data: {
     user: {
@@ -89,48 +86,11 @@ export default () => {
     },
   },
   success: false
-}`}
-      />
-      <Editor
-        value={`{
-  "type": "object",
-  "description": "",
-  "properties": {
-    "success": {
-      "type": "boolean",
-      "description": ""
-    },
-    "data": {
-      "type": "object",
-      "description": "",
-      "properties": {
-        "user": {
-          "type": "object",
-          "description": "",
-          "properties": {
-            "name": {
-              "type": "string",
-              "description": ""
-            },
-            "age": {
-              "type": "number",
-              "description": "born in 1996"
-            },
-            "key": {
-              "type": "string",
-              "description": ""
-            },
-            "phoneNumber": {
-              "type": "number",
-              "description": "11 digits in number format"
-            }
-          }
-        }
-      }
-    }
-  }
-}`}
-      />
+}`);
+  return (
+    <>
+      <Editor value={value} onChange={setValue} />
+      <Editor value={value.slice(0)} />
     </>
   );
 };

@@ -100,14 +100,14 @@ export function registerPlugin(uid: symbol) {
 
     // exist property
     Prism.hooks.add('wrap', env => {
-      let { cache } = editorCacheMap.get(getLanguageAsSymbol(env))!;
+      let { cache = [] } = editorCacheMap.get(getLanguageAsSymbol(env)) || {};
       if (env.type === 'property') {
         const extraClassList = env.classes[2].split(' ');
         const objectPath = extraClassList[extraClassList.length - 1];
-        if (cache.includes(`${getInnerContent(env.content)}-${objectPath}`)) {
+        if (cache.includes(objectPath)) {
           env.classes.push('exist-property');
         } else {
-          cache.push(`${getInnerContent(env.content)}-${objectPath}`);
+          cache.push(objectPath);
         }
       }
 

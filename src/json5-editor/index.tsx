@@ -36,6 +36,12 @@ interface RefProps {
   onChange: React.Dispatch<React.SetStateAction<string>>;
 }
 
+const clearObjPathCache = (uid: symbol) => {
+  Prism.hooks.run('before-insert', {
+    language: (uid as unknown) as string,
+  });
+};
+
 export default memo(
   forwardRef((props: Props, ref: Ref<RefProps>) => {
     const textAreaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -63,15 +69,14 @@ export default memo(
     useEffect(() => {
       if ('value' in props) {
         setCode(value || '');
+        clearObjPathCache(editorUid.current);
       }
       skipNextOnchange.current = true;
     }, [value || '']);
 
     useUpdateEffect(() => {
       // cast to wrong type to keep each editor unique
-      Prism.hooks.run('before-insert', {
-        language: (editorUid.current as unknown) as string,
-      });
+      clearObjPathCache(editorUid.current);
       skipNextOnchange.current = false;
     }, [code || '']);
 
@@ -324,10 +329,7 @@ export default memo(
           onValueChange={setCode}
           highlight={code => {
             setTimeout(() => {
-              // cast to wrong type to keep each editor unique
-              Prism.hooks.run('before-insert', {
-                language: editorUid.current as any,
-              });
+              clearObjPathCache(editorUid.current);
             });
             // HACK: highlight 的 ts 类型是 string，但传递 symbol 作为 editor 的唯一 id，此处 cast 为一个错误类型，但是有意为之
             return highlight(
