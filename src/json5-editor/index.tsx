@@ -19,6 +19,7 @@ import useUpdateEffect from './hooks/useUpdateEffect';
 import './style.less';
 import prettier from 'prettier/standalone';
 import parserBabel from './utils/parser-babel';
+import { endList, startList } from './constant';
 
 interface Props {
   initialValue?: string;
@@ -145,6 +146,7 @@ export default memo(
                 !val.includes('[') &&
                 !val.includes('{') &&
                 !val.includes('"') &&
+                !val.includes('|') &&
                 !val.includes("'") &&
                 val !== 'true' &&
                 val !== 'false' &&
@@ -204,6 +206,18 @@ export default memo(
             document.execCommand('insertText', false, ' ');
           });
         }
+
+        if (ev.key === '|') {
+          ev.preventDefault();
+          window.requestAnimationFrame(() => {
+            document.execCommand(
+              'insertText',
+              false,
+              `${codeRef.current[startPos - 1] === ' ' ? '' : ' '}| `,
+            );
+          });
+        }
+
         if (ev.key === '"') {
           fillAfter(textArea, '"');
         }
@@ -222,10 +236,18 @@ export default memo(
           value: string,
           index: number,
         ) => {
+          if (index < 0) {
+            return value;
+          }
           const trimed = value.trim();
           const next = queue[index + 1];
-          if (next?.type === 'comment' && trimed) {
-            return `"${trimed}",`;
+          if (
+            (next?.type === 'comment' ||
+              next?.type === 'punctuation' ||
+              (typeof next === 'string' && !(next as string).trim())) &&
+            trimed
+          ) {
+            return `"${trimed}"`;
           }
           if (trimed) {
             return `"${trimed}",\n`;
@@ -249,12 +271,23 @@ export default memo(
             return [...acc, ele];
           }, []) || [];
 
+        const getTokenStr = (tk: Token, index: number): string => {
+          if (typeof tk === 'string') {
+            return getFormattedLine(tokens, tk, index);
+          }
+          if (tk.type === 'unknown') {
+            return getFormattedLine(tokens, tk.content as string, index);
+          }
+          if (Array.isArray(tk.content)) {
+            return tk.content
+              .map(ele => getTokenStr(ele as Token, -1))
+              .join('');
+          }
+          return tk.content as string;
+        };
+
         const tokenGeneratedCode = tokens
-          .map((ele, index) =>
-            typeof ele === 'string'
-              ? `${getFormattedLine(tokens, ele, index)}`
-              : ele.content,
-          )
+          .map((ele, index) => getTokenStr(ele, index))
           .join('');
 
         let formatted = tokenGeneratedCode;
@@ -285,12 +318,30 @@ export default memo(
       const cursorChangeHanlder = () => {
         const startPos = textArea?.selectionStart || 0;
         const endPos = textArea?.selectionEnd || 0;
+        clearPairs(preElementRef.current!);
         if (Math.abs(startPos - endPos) > 1) {
           return;
         }
-        clearPairs(preElementRef.current!);
-        const startList = ['{', '[', '('];
-        const endList = ['}', ']', ')'];
+        if (
+          codeRef.current
+            .slice(startPos)
+            .split('')
+            .filter(ele => ele === '"').length %
+            2 ===
+          1
+        ) {
+          return;
+        }
+        if (
+          codeRef.current
+            .slice(startPos)
+            .split('')
+            .filter(ele => ele === "'").length %
+            2 ===
+          1
+        ) {
+          return;
+        }
         if (startList.includes(codeRef.current[startPos])) {
           activePairs(preElementRef.current!, startPos);
         } else if (startList.includes(codeRef.current[startPos - 1])) {

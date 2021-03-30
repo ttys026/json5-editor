@@ -12,10 +12,6 @@ export const fillWithIndent = (
     startPos === endPos && (code || '')[startPos - 1] === needle;
   // 没有选中任何文本，且前一个字符是可以被配对时：
   if (condition) {
-    // if() {
-    //   //
-    // }
-    console.log();
     event.preventDefault();
     setCode(c => {
       const prefix = c.slice(0, startPos);
@@ -38,13 +34,14 @@ export const fillWithIndent = (
         codeArray.filter(ele => ele === needle).length !==
         codeArray.filter(ele => ele === fill).length;
 
+      // 处于 pair 之间，按下回车
       const needExtraSpace = (code || '')[startPos] === fill;
 
       if (!needFill) {
         return [
           prefix,
           `\n${Array(leadingWhiteSpace + 1).join(' ')}${
-            needExtraSpace ? '\n' : ''
+            needExtraSpace ? `\n${Array(leadingWhiteSpace - 1).join(' ')}` : ''
           }`,
           suffix,
         ].join('');

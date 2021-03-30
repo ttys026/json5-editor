@@ -48,6 +48,18 @@
   .token.keyword {
     color: #905;
   }
+  .token.enum {
+    & .token.string,
+    & .token.number,
+    & .token.boolean,
+    & .token.keyword {
+      color: #e34c26;
+    }
+    & .token.description {
+      color: #690;
+    }
+    color: #e34c26;
+  }
   .token.property {
     color: #005cc5;
   }

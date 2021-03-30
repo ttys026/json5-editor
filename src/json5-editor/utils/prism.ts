@@ -6,6 +6,12 @@ import Prism, { hooks, Environment, Token } from 'prismjs';
 import 'prismjs/components/prism-markup.min.js';
 import 'prismjs/components/prism-json.min.js';
 import 'prismjs/components/prism-json5.min.js';
+import { endList, startList } from '../constant';
+
+interface IP {
+  name: string;
+  age: number;
+}
 
 const getInnerContent = (str: string) => {
   if (str.startsWith('"') || str.startsWith("'")) {
@@ -48,8 +54,10 @@ export function registerPlugin(uid: symbol) {
 
   // before-insert is a self registered hook that can determine first time registration
   if (!((Prism.hooks.all || {})['before-insert'] || []).length) {
-    Prism.hooks.add('before-tokenize', env => {
-      env.grammar.indent = /[ ]{2}/;
+    Prism.languages.json5 = Prism.languages.extend('json5', {
+      indent: /[ ]{2}/,
+      punctuation: /[{}[\],\|\(\)]/,
+      unknown: /(?!\s)[_$a-zA-Z\xA0-\uFFFF](?:(?!\s)[$\w\xA0-\uFFFF])*(?=\s*)/,
     });
 
     Prism.hooks.add('after-tokenize', function(env) {
@@ -85,7 +93,7 @@ export function registerPlugin(uid: symbol) {
           lastProperty = getInnerContent(env.tokens[i].content);
           prefix.push(lastProperty);
           env.tokens[i].alias = `${env.tokens[i].alias || ''} ${prefix.join(
-            '-',
+            '.',
           )}`.trim();
         }
       }
@@ -111,10 +119,10 @@ export function registerPlugin(uid: symbol) {
         }
       }
 
-      if (['{', '(', '['].includes(env.content)) {
+      if (startList.includes(env.content)) {
         env.classes.push('brace', 'brace-start');
       }
-      if (['}', ')', ']'].includes(env.content)) {
+      if (endList.includes(env.content)) {
         env.classes.push('brace', 'brace-end');
       }
     });
