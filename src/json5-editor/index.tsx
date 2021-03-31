@@ -2,6 +2,7 @@ import React, {
   forwardRef,
   memo,
   Ref,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useMemo,
@@ -48,6 +49,7 @@ export default memo(
     const textAreaRef = useRef<HTMLTextAreaElement | null>(null);
     const preElementRef = useRef<HTMLPreElement | null>(null);
     const [code, setCode] = useState<string>(props.initialValue || '');
+    const [hasFormatError, setHasFormatError] = useState(false);
     const { value = '', onChange } = props;
     const skipNextOnchange = useRef(true);
     // 支持多例，隔离 prism hook 间影响
@@ -55,11 +57,16 @@ export default memo(
 
     const codeRef = useRef(code);
 
+    const format = useCallback(() => {
+      textAreaRef.current?.dispatchEvent(new Event('blur'));
+    }, []);
+
     useImperativeHandle(ref, () => ({
       editorRef: textAreaRef.current,
       preRef: preElementRef.current,
       value: code,
       onChange: setCode,
+      format,
     }));
 
     useMemo(() => {
@@ -225,9 +232,11 @@ export default memo(
           fillAfter(textArea, "'");
         }
       };
-      // format on blue
-      const blurHandler = () => {
-        clearPairs(preElementRef.current!);
+      // format on blur
+      const blurHandler = (ev: FocusEvent) => {
+        if (ev.isTrusted) {
+          clearPairs(preElementRef.current!);
+        }
 
         const prevTokens = getTokens(editorUid.current);
 
@@ -309,9 +318,10 @@ export default memo(
             bracketSpacing: true,
             plugins: [parserBabel as any],
           });
+          setHasFormatError(false);
         } catch (e) {
-          formatted = tokenGeneratedCode;
           // don't format
+          setHasFormatError(true);
           if (process.env.NODE_ENV === 'development') {
             console.log(JSON.stringify(e));
           }
@@ -358,8 +368,13 @@ export default memo(
         }
       };
 
+      const focusHandler = () => {
+        setHasFormatError(false);
+      };
+
       textArea?.addEventListener('keydown', keyDownHandler);
       textArea?.addEventListener('blur', blurHandler);
+      textArea?.addEventListener('focus', focusHandler);
       textArea?.addEventListener('keyup', cursorChangeHanlder);
       textArea?.addEventListener('click', cursorChangeHanlder);
       return () => {
@@ -367,13 +382,20 @@ export default memo(
         unRegisterPlugin(editorUid.current);
         textArea?.removeEventListener('keydown', keyDownHandler);
         textArea?.removeEventListener('blur', blurHandler);
+        textArea?.removeEventListener('focus', focusHandler);
         textArea?.removeEventListener('keyup', cursorChangeHanlder);
         textArea?.removeEventListener('click', cursorChangeHanlder);
       };
     }, []);
 
     return (
-      <div className={`json5-editor-wrapper ${props.className || ''}`.trim()}>
+      <div
+        className={`${
+          hasFormatError
+            ? 'json5-editor-wrapper has-error'
+            : 'json5-editor-wrapper'
+        } ${props.className || ''}`.trim()}
+      >
         <Editor
           ref={(r: any) => {
             textAreaRef.current = r?._input;

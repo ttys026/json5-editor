@@ -8,13 +8,21 @@
   pre {
     min-height: 200px;
   }
+
   border: 1px solid #e8e8e8;
+  &.has-error {
+    border: 1px solid rgba(255, 77, 79, 0.5);
+  }
+
   max-height: 600px;
   overflow: auto;
   transition: all 0.3s;
 
   &:hover {
-    border: 1px solid #40a9ff;
+    border: 1px solid rgba(64, 169, 255, 0.5);
+  }
+  &.has-error:hover {
+    border: 1px solid rgb(255, 77, 79);
   }
   &:focus-within {
     border-color: #40a9ff;
@@ -29,7 +37,7 @@
   .token.punctuation.active {
     outline: 1px solid rgba(0, 0, 0, 0.25);
   }
-  .token.gutter {
+  .token.indent {
     &::after {
       position: absolute;
       content: url("data:image/svg+xml;utf-8,<svg xmlns='http://www.w3.org/2000/svg' width='21' height='21'><line stroke='rgba(0,0,0,0.2)' x1='0' y1='0' x2='0' y2='21'></line></svg>");
@@ -47,18 +55,6 @@
   .token.boolean,
   .token.keyword {
     color: #905;
-  }
-  .token.enum {
-    & .token.string,
-    & .token.number,
-    & .token.boolean,
-    & .token.keyword {
-      color: #e34c26;
-    }
-    & .token.description {
-      color: #690;
-    }
-    color: #e34c26;
   }
   .token.property {
     color: #005cc5;
