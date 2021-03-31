@@ -55,7 +55,14 @@ export function registerPlugin(uid: symbol) {
   // before-insert is a self registered hook that can determine first time registration
   if (!((Prism.hooks.all || {})['before-insert'] || []).length) {
     Prism.languages.json5 = Prism.languages.extend('json5', {
-      indent: /[ ]{2}/,
+      indent: {
+        pattern: /\n[ ]*|^[ ]*/,
+        inside: {
+          gutter: {
+            pattern: /[ ]{2}/,
+          },
+        },
+      },
       punctuation: /[{}[\],\|\(\)]/,
       unknown: /(?!\s)[_$a-zA-Z\xA0-\uFFFF](?:(?!\s)[$\w\xA0-\uFFFF])*(?=\s*)/,
     });

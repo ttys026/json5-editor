@@ -247,7 +247,7 @@ export default memo(
               (typeof next === 'string' && !(next as string).trim())) &&
             trimed
           ) {
-            return `"${trimed}"`;
+            return `"${trimed}"\n`;
           }
           if (trimed) {
             return `"${trimed}",\n`;
@@ -267,7 +267,7 @@ export default memo(
                 ...acc.slice(0, acc.length - 1),
                 (`${prev.content}${
                   typeof ele === 'string' ? ele : ele.content
-                }` as unknown) as Token,
+                }\n` as unknown) as Token,
               ];
             }
             return [...acc, ele];
@@ -293,6 +293,15 @@ export default memo(
           .join('');
 
         let formatted = tokenGeneratedCode;
+        const emptyLinesRemoved = formatted!
+          .split('\n')
+          .filter(ele => !ele.split('').every(ele => ele === ' '))
+          .join('\n');
+
+        formatted = emptyLinesRemoved.endsWith(',')
+          ? emptyLinesRemoved.slice(0, emptyLinesRemoved.length - 1)
+          : emptyLinesRemoved;
+
         try {
           formatted = prettier.format(formatted!, {
             parser: 'json5',
@@ -301,20 +310,14 @@ export default memo(
             plugins: [parserBabel as any],
           });
         } catch (e) {
+          formatted = tokenGeneratedCode;
           // don't format
           if (process.env.NODE_ENV === 'development') {
-            console.log(e);
+            console.log(JSON.stringify(e));
           }
         }
-        const emptyLinesRemoved = formatted!
-          .split('\n')
-          .filter(ele => !ele.split('').every(ele => ele === ' '))
-          .join('\n');
-        setCode(
-          emptyLinesRemoved.endsWith(',')
-            ? emptyLinesRemoved.slice(0, emptyLinesRemoved.length - 1)
-            : emptyLinesRemoved,
-        );
+
+        setCode(formatted);
       };
       // highlight active braces
       const cursorChangeHanlder = () => {

@@ -21,9 +21,10 @@ export default () => {
 ### feature
 
 - Syntax highlight
-- Auto formatting
+- Auto formatting & error correcting
 - Duplicate property name checking
 - Brace matching
+- code ruler
 
 > about how it works and limitations, please refer to https://github.com/satya164/react-simple-code-editor
 
