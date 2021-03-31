@@ -260,12 +260,14 @@ export default memo(
             const prev = acc[acc.length - 1];
             if (
               prev?.type === 'number' &&
-              typeof ele === 'string' &&
-              (ele as string).trim()
+              ((typeof ele === 'string' && (ele as string).trim()) ||
+                ele.type === 'unknown')
             ) {
               return [
                 ...acc.slice(0, acc.length - 1),
-                (`${prev.content}${ele}` as unknown) as Token,
+                (`${prev.content}${
+                  typeof ele === 'string' ? ele : ele.content
+                }` as unknown) as Token,
               ];
             }
             return [...acc, ele];
