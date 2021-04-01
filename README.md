@@ -38,3 +38,5 @@ export default () => {
 | placeholder  | placeholder of textarea                                     | string              | ''      |
 | style        | className of textarea and pre tag                           | React.CSSProperties | -       |
 | className    | className of outer container                                | string              | -       |
+| disabled     | whether the editor is disbled                               | boolean             | false   |
+| readOnly     | whether the editor is readonly                              | boolean             | false   |

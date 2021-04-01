@@ -1,5 +1,9 @@
-.json5-editor-wrapper {
+@namespace: ~'json5-editor-wrapper';
+
+.@{namespace} {
   min-height: 200px;
+  cursor: text;
+
   div,
   textarea {
     outline: none;
@@ -10,8 +14,17 @@
   }
 
   border: 1px solid #e8e8e8;
-  &.has-error {
+  &.@{namespace}-has-error {
     border: 1px solid rgba(255, 77, 79, 0.5);
+  }
+
+  &.@{namespace}-disabled {
+    cursor: not-allowed;
+    background-color: #f5f5f5;
+    border-color: #e8e8e8;
+    &:hover {
+      border-color: #e8e8e8;
+    }
   }
 
   max-height: 600px;
@@ -21,7 +34,7 @@
   &:hover {
     border: 1px solid rgba(64, 169, 255, 0.5);
   }
-  &.has-error:hover {
+  &.@{namespace}-has-error:hover {
     border: 1px solid rgb(255, 77, 79);
   }
   &:focus-within {

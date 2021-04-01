@@ -11,6 +11,7 @@ import React, {
 } from 'react';
 import Editor from 'react-simple-code-editor';
 import Prism, { highlight, languages, Token } from 'prismjs';
+import classNames from 'classnames';
 
 import { fillWithIndent, fillAfter } from './utils/autoComplete';
 import { activePairs, clearPairs } from './utils/match';
@@ -29,6 +30,8 @@ interface Props {
   placeholder?: string;
   style?: React.CSSProperties;
   className?: string;
+  disabled?: boolean;
+  readOnly?: boolean;
 }
 
 interface RefProps {
@@ -36,6 +39,7 @@ interface RefProps {
   preRef: HTMLPreElement | null;
   value: string;
   onChange: React.Dispatch<React.SetStateAction<string>>;
+  format: () => void;
 }
 
 const clearObjPathCache = (uid: symbol) => {
@@ -54,8 +58,17 @@ export default memo(
     const skipNextOnchange = useRef(true);
     // 支持多例，隔离 prism hook 间影响
     const editorUid = useRef(Symbol());
+    const shouldForbiddenEdit = props.disabled || props.readOnly;
 
     const codeRef = useRef(code);
+
+    useEffect(() => {
+      if (shouldForbiddenEdit) {
+        textAreaRef.current!.style.pointerEvents = 'none';
+      } else {
+        textAreaRef.current!.style.removeProperty('pointerEvents');
+      }
+    }, [shouldForbiddenEdit]);
 
     const format = useCallback(() => {
       textAreaRef.current?.dispatchEvent(new Event('blur'));
@@ -390,11 +403,12 @@ export default memo(
 
     return (
       <div
-        className={`${
-          hasFormatError
-            ? 'json5-editor-wrapper has-error'
-            : 'json5-editor-wrapper'
-        } ${props.className || ''}`.trim()}
+        className={classNames(
+          'json5-editor-wrapper',
+          hasFormatError ? 'json5-editor-wrapper-has-error' : '',
+          props.className,
+          props.disabled ? 'json5-editor-wrapper-disabled' : '',
+        )}
       >
         <Editor
           ref={(r: any) => {

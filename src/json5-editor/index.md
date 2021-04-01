@@ -52,7 +52,7 @@ export default () => {
       form={form}
     >
       <Form.Item name="code">
-        <Editor />
+        <Editor disabled />
       </Form.Item>
       <button onClick={() => console.log(form.getFieldsValue())}>
         getFieldsValue
@@ -89,7 +89,7 @@ export default () => {
 }`);
   return (
     <>
-      <Editor value={value} onChange={setValue} />
+      <Editor readOnly value={value} onChange={setValue} />
       <Editor value={value.slice(0)} />
     </>
   );
