@@ -18,14 +18,16 @@ export default () => <Editor initialValue={`{\n  \n}`} />;
  * title: work with antd form
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Form } from 'antd';
 import { Editor } from 'json5-editor';
 
 export default () => {
   const [form] = Form.useForm();
+  const [key, setKey] = useState(0);
   return (
     <Form
+      key={key}
       onValuesChange={console.log}
       initialValues={{
         code: `{
@@ -54,6 +56,7 @@ export default () => {
       <Form.Item name="code">
         <Editor disabled />
       </Form.Item>
+      <button onClick={() => setKey(k => k + 1)}>rerender</button>
       <button onClick={() => console.log(form.getFieldsValue())}>
         getFieldsValue
       </button>

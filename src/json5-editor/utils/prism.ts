@@ -8,11 +8,6 @@ import 'prismjs/components/prism-json.min.js';
 import 'prismjs/components/prism-json5.min.js';
 import { endList, startList } from '../constant';
 
-interface IP {
-  name: string;
-  age: number;
-}
-
 const getInnerContent = (str: string) => {
   if (str.startsWith('"') || str.startsWith("'")) {
     return str.slice(1, str.length - 1);
@@ -33,11 +28,23 @@ const getLanguageAsSymbol = (
 
 const cacheTokens = (uid: symbol, tokens: Token[]) => {
   setTimeout(() => {
-    editorCacheMap.set(uid, {
-      cache: editorCacheMap.get(uid)?.cache || [],
-      latestTokens: tokens,
-    });
+    // 如果已经被卸载了，则不重新缓存 tokens
+    if (editorCacheMap.has(uid)) {
+      editorCacheMap.set(uid, {
+        cache: editorCacheMap.get(uid)?.cache || [],
+        latestTokens: tokens,
+      });
+    }
   });
+};
+
+const resetTokens = (uid: symbol) => {
+  if (editorCacheMap.has(uid)) {
+    editorCacheMap.set(uid, {
+      cache: [],
+      latestTokens: [],
+    });
+  }
 };
 
 export const getTokens = (uid: symbol) => {
@@ -62,6 +69,7 @@ export function registerPlugin(uid: symbol) {
     });
 
     Prism.hooks.add('after-tokenize', function(env) {
+      resetTokens(getLanguageAsSymbol(env));
       let lastProperty = 'root';
       let prefix: Array<string | number> = [];
       cacheTokens(getLanguageAsSymbol(env), env.tokens);
@@ -101,22 +109,21 @@ export function registerPlugin(uid: symbol) {
     });
 
     Prism.hooks.add('before-insert', env => {
-      editorCacheMap.set(getLanguageAsSymbol(env), {
-        cache: [],
-        latestTokens: [],
-      });
+      resetTokens(getLanguageAsSymbol(env));
     });
 
     // exist property
     Prism.hooks.add('wrap', env => {
-      let { cache = [] } = editorCacheMap.get(getLanguageAsSymbol(env)) || {};
-      if (env.type === 'property') {
-        const extraClassList = env.classes[2].split(' ');
-        const objectPath = extraClassList[extraClassList.length - 1];
-        if (cache.includes(objectPath)) {
-          env.classes.push('exist-property');
-        } else {
-          cache.push(objectPath);
+      if (editorCacheMap.get(getLanguageAsSymbol(env))) {
+        let { cache = [] } = editorCacheMap.get(getLanguageAsSymbol(env)) || {};
+        if (env.type === 'property') {
+          const extraClassList = env.classes[2].split(' ');
+          const objectPath = extraClassList[extraClassList.length - 1];
+          if (cache.includes(objectPath)) {
+            env.classes.push('exist-property');
+          } else {
+            cache.push(objectPath);
+          }
         }
       }
 
