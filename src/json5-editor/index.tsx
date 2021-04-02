@@ -65,8 +65,10 @@ export default memo(
     useEffect(() => {
       if (shouldForbiddenEdit) {
         textAreaRef.current!.style.pointerEvents = 'none';
+        textAreaRef.current?.setAttribute('tabIndex', '-1');
       } else {
         textAreaRef.current!.style.removeProperty('pointerEvents');
+        textAreaRef.current?.removeAttribute('tabIndex');
       }
     }, [shouldForbiddenEdit]);
 
