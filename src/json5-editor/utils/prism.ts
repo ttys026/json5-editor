@@ -65,45 +65,76 @@ export function registerPlugin(uid: symbol) {
       // TODO: should skip non-leading spaces
       indent: /[ ]{2}/,
       punctuation: /[{}[\],\|\(\)]/,
-      unknown: /(?!\s).+.+(?=\s*)/,
+      unknown: /(?!\s).+(?=\s*)/,
     });
 
     Prism.hooks.add('after-tokenize', function(env) {
       resetTokens(getLanguageAsSymbol(env));
-      let lastProperty = 'root';
-      let prefix: Array<string | number> = [];
+      let lastProperty: string | number | symbol = 'root';
+      // 当遇到 array 时，插入一个 placeholder symbol，用于在 arrayPrefix 数组中找到真实的 index 后替换
+      let prefix: Array<string | number | symbol> = [];
+      let arrayPrefix: number[] = [];
+      let symbol = Symbol('placeholder');
+      let skipCount = 0;
+      const pushIfNeed = (property: string | number) => {
+        if (property && property !== 0) {
+          prefix.push(property);
+        } else {
+          skipCount += 1;
+        }
+      };
+
+      const popIfNeed = () => {
+        if (skipCount === 0) {
+          prefix.pop();
+        } else {
+          skipCount -= 1;
+        }
+      };
+
       cacheTokens(getLanguageAsSymbol(env), env.tokens);
       for (let i = 0; i < (env.tokens?.length || 0); i++) {
         if (env.tokens[i].content === '{') {
-          prefix.push(lastProperty);
+          pushIfNeed(lastProperty);
+          lastProperty = '';
+          // prefix.push(lastProperty);
         }
         if (env.tokens[i].content === '[') {
-          prefix.push(0);
+          pushIfNeed(lastProperty);
+          arrayPrefix.push(0);
+          prefix.push(symbol);
+          lastProperty = '';
         }
         if (env.tokens[i].content === '}') {
-          prefix.pop();
-          const last = prefix.pop();
-          if (typeof last === 'number') {
-            prefix.push(last + 1);
+          popIfNeed();
+          lastProperty = prefix[prefix.length - 1];
+          if (arrayPrefix.length && typeof lastProperty === 'symbol') {
+            arrayPrefix[arrayPrefix.length - 1]++;
           }
+          lastProperty = '';
         }
         if (env.tokens[i].content === ']') {
+          // should pop out a symbol
           prefix.pop();
-          const last = prefix.pop();
-          if (typeof last === 'number') {
-            prefix.push(last + 1);
+          popIfNeed();
+          arrayPrefix.pop();
+          lastProperty = prefix[prefix.length - 1];
+          if (arrayPrefix.length && typeof lastProperty === 'symbol') {
+            arrayPrefix[arrayPrefix.length - 1]++;
           }
+          lastProperty = '';
         }
         if (env.tokens[i].type === 'property') {
-          const last = prefix.pop();
-          if (typeof last === 'number') {
-            prefix.push(last);
-          }
           lastProperty = getInnerContent(env.tokens[i].content);
-          prefix.push(lastProperty);
-          env.tokens[i].alias = `${env.tokens[i].alias || ''} ${prefix.join(
-            '.',
-          )}`.trim();
+          let arrayIndex = 0;
+          env.tokens[i].alias = `${env.tokens[i].alias || ''} ${[
+            ...prefix,
+            lastProperty,
+          ]
+            .map(ele =>
+              typeof ele === 'symbol' ? arrayPrefix[arrayIndex++] : ele,
+            )
+            .join('.')}`.trim();
         }
       }
     });
@@ -117,7 +148,7 @@ export function registerPlugin(uid: symbol) {
       if (editorCacheMap.get(getLanguageAsSymbol(env))) {
         let { cache = [] } = editorCacheMap.get(getLanguageAsSymbol(env)) || {};
         if (env.type === 'property') {
-          const extraClassList = env.classes[2].split(' ');
+          const extraClassList = (env.classes[2] || '').split(' ');
           const objectPath = extraClassList[extraClassList.length - 1];
           if (cache.includes(objectPath)) {
             env.classes.push('exist-property');
