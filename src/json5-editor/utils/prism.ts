@@ -75,38 +75,22 @@ export function registerPlugin(uid: symbol) {
       let prefix: Array<string | number | symbol> = [];
       let arrayPrefix: number[] = [];
       let symbol = Symbol('placeholder');
-      let skipCount = 0;
-      const pushIfNeed = (property: string | number) => {
-        if (property && property !== 0) {
-          prefix.push(property);
-        } else {
-          skipCount += 1;
-        }
-      };
-
-      const popIfNeed = () => {
-        if (skipCount === 0) {
-          prefix.pop();
-        } else {
-          skipCount -= 1;
-        }
-      };
 
       cacheTokens(getLanguageAsSymbol(env), env.tokens);
       for (let i = 0; i < (env.tokens?.length || 0); i++) {
         if (env.tokens[i].content === '{') {
-          pushIfNeed(lastProperty);
+          prefix.push(lastProperty);
           lastProperty = '';
           // prefix.push(lastProperty);
         }
         if (env.tokens[i].content === '[') {
-          pushIfNeed(lastProperty);
+          prefix.push(lastProperty);
           arrayPrefix.push(0);
           prefix.push(symbol);
           lastProperty = '';
         }
         if (env.tokens[i].content === '}') {
-          popIfNeed();
+          prefix.pop();
           lastProperty = prefix[prefix.length - 1];
           if (arrayPrefix.length && typeof lastProperty === 'symbol') {
             arrayPrefix[arrayPrefix.length - 1]++;
@@ -114,9 +98,8 @@ export function registerPlugin(uid: symbol) {
           lastProperty = '';
         }
         if (env.tokens[i].content === ']') {
-          // should pop out a symbol
           prefix.pop();
-          popIfNeed();
+          prefix.pop();
           arrayPrefix.pop();
           lastProperty = prefix[prefix.length - 1];
           if (arrayPrefix.length && typeof lastProperty === 'symbol') {
@@ -131,6 +114,7 @@ export function registerPlugin(uid: symbol) {
             ...prefix,
             lastProperty,
           ]
+            .filter(ele => ele !== '')
             .map(ele =>
               typeof ele === 'symbol' ? arrayPrefix[arrayIndex++] : ele,
             )
