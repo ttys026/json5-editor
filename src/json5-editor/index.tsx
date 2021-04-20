@@ -65,9 +65,17 @@ export default memo(
     useEffect(() => {
       if (shouldForbiddenEdit) {
         textAreaRef.current!.style.pointerEvents = 'none';
+        textAreaRef.current!.style.userSelect = 'none';
         textAreaRef.current?.setAttribute('tabIndex', '-1');
+
+        preElementRef.current!.style.removeProperty('user-select');
+        preElementRef.current!.style.removeProperty('pointer-events');
       } else {
-        textAreaRef.current!.style.removeProperty('pointerEvents');
+        preElementRef.current!.style.userSelect = 'none';
+        preElementRef.current!.style.pointerEvents = 'none';
+
+        textAreaRef.current!.style.removeProperty('pointer-events');
+        textAreaRef.current!.style.removeProperty('user-select');
         textAreaRef.current?.removeAttribute('tabIndex');
       }
     }, [shouldForbiddenEdit]);
@@ -419,6 +427,7 @@ export default memo(
               ?.nextElementSibling as HTMLPreElement;
           }}
           value={code}
+          disabled={shouldForbiddenEdit}
           placeholder={props.placeholder}
           onValueChange={setCode}
           highlight={code => {
