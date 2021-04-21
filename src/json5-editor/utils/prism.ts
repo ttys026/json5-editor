@@ -51,6 +51,18 @@ export const getTokens = (uid: symbol) => {
   return editorCacheMap.get(uid)?.latestTokens;
 };
 
+export const getTokenAtIndex = (uid: symbol, index: number) => {
+  const tokens = getTokens(uid) || [];
+  let remain = index;
+  for (let token of tokens) {
+    remain -= token.length;
+    if (remain < 0) {
+      return token;
+    }
+  }
+  return undefined;
+};
+
 const editorCacheMap = new Map<symbol, EditorState>();
 
 export function registerPlugin(uid: symbol) {

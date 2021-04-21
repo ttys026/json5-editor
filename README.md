@@ -26,7 +26,9 @@ export default () => {
 - Brace matching
 - code ruler
 
-> about how it works and limitations, please refer to https://github.com/satya164/react-simple-code-editor
+**Not optimized for big JSON, use at your own risk**
+
+> more about how it works and limitations, please refer to https://github.com/satya164/react-simple-code-editor#how-it-works
 
 ### API
 

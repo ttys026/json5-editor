@@ -15,13 +15,18 @@ import classNames from 'classnames';
 
 import { fillWithIndent, fillAfter } from './utils/autoComplete';
 import { activePairs, clearPairs } from './utils/match';
-import { getTokens, registerPlugin, unRegisterPlugin } from './utils/prism';
+import {
+  getTokenAtIndex,
+  getTokens,
+  registerPlugin,
+  unRegisterPlugin,
+} from './utils/prism';
 import { nextTick } from './utils/nextTick';
 import useUpdateEffect from './hooks/useUpdateEffect';
 import './style.less';
 import prettier from 'prettier/standalone';
 import parserBabel from './utils/parser-babel';
-import { endList, startList } from './constant';
+import { endList, keywords, startList } from './constant';
 
 interface Props {
   initialValue?: string;
@@ -128,6 +133,11 @@ export default memo(
           return;
         }
 
+        const currentToken = getTokenAtIndex(editorUid.current, startPos);
+        if (currentToken?.type === 'string') {
+          return;
+        }
+
         if (ev.code === 'Enter' && !ev.isComposing) {
           // 如果选中了文字，则不做特殊处理
           const filled = [
@@ -148,7 +158,7 @@ export default memo(
           try {
             // 浏览器兼容性考虑，不使用 lookbehind
             // const regexRet = /(.*):((?:(?!\/\/).)+)(\/\/.*)?/.exec(currentLine);
-            const regexRet = /(.*):(.+)/.exec(currentLine);
+            const regexRet = /([^:]*):(.+)/.exec(currentLine);
             const [, rowKey = '', rowValue = ''] = regexRet || [];
             const commentSplitIndex = rowValue.lastIndexOf('//');
             const [key, value, comments] = [
@@ -178,10 +188,7 @@ export default memo(
                 !val.includes('"') &&
                 !val.includes('|') &&
                 !val.includes("'") &&
-                val !== 'true' &&
-                val !== 'false' &&
-                val !== 'null' &&
-                val !== 'undefined'
+                !keywords.includes(val)
               );
             };
             const formattedValue = needConvertValue(valueWithoutTrailingComma)
@@ -279,7 +286,7 @@ export default memo(
               (typeof next === 'string' && !(next as string).trim())) &&
             trimed
           ) {
-            return `"${trimed}"\n`;
+            return `"${trimed}"${next?.type === 'comment' ? '' : '\n'}`;
           }
           if (trimed) {
             return `"${trimed}",\n`;
@@ -335,10 +342,11 @@ export default memo(
           : emptyLinesRemoved;
 
         try {
-          formatted = prettier.format(formatted!, {
+          formatted = prettier.format(formatted || '', {
             parser: 'json5',
             quoteProps: 'preserve',
             bracketSpacing: true,
+            // trade off with bundle size and prettier function
             plugins: [parserBabel as any],
           });
           setHasFormatError(false);
