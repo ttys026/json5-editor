@@ -1,1 +1,1 @@
-export { default as Editor } from './json5-editor';
+export { default as Editor, formatJSON5 } from './json5-editor';

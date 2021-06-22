@@ -53,6 +53,16 @@ const clearObjPathCache = (uid: symbol) => {
   });
 };
 
+export const formatJSON5 = (code: string) => {
+  return prettier.format(code || '', {
+    parser: 'json5',
+    quoteProps: 'preserve',
+    bracketSpacing: true,
+    // trade off with bundle size and prettier function
+    plugins: [parserBabel as any],
+  });
+};
+
 export default memo(
   forwardRef((props: Props, ref: Ref<RefProps>) => {
     const textAreaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -342,13 +352,7 @@ export default memo(
           : emptyLinesRemoved;
 
         try {
-          formatted = prettier.format(formatted || '', {
-            parser: 'json5',
-            quoteProps: 'preserve',
-            bracketSpacing: true,
-            // trade off with bundle size and prettier function
-            plugins: [parserBabel as any],
-          });
+          formatted = formatJSON5(formatted);
           setHasFormatError(false);
         } catch (e) {
           // don't format
