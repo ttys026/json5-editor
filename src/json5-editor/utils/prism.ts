@@ -23,7 +23,7 @@ interface EditorState {
 const getLanguageAsSymbol = (
   env: hooks.RequiredEnvironment<'language', Environment>,
 ) => {
-  return (env.language as unknown) as symbol;
+  return env.language as unknown as symbol;
 };
 
 const cacheTokens = (uid: symbol, tokens: Token[]) => {
@@ -73,14 +73,29 @@ export function registerPlugin(uid: symbol) {
 
   // before-insert is a self registered hook that can determine first time registration
   if (!((Prism.hooks.all || {})['before-insert'] || []).length) {
+    const nextPropertyRegex = [
+      ...(Prism.languages.json5.property as {
+        pattern: RegExp;
+        alias?: string;
+      }[]),
+    ];
+    // extends unquoted property to support * and ? at end.
+    nextPropertyRegex[1] = {
+      pattern:
+        /(?!\s)[_$a-zA-Z\xA0-\uFFFF\*](?:(?!\s)[$\w\xA0-\uFFFF\*\?])*(?=\s*:)/,
+      alias: 'unquoted',
+    };
     Prism.languages.json5 = Prism.languages.extend('json5', {
+      property: nextPropertyRegex,
+      linebreak: /\n/,
       // TODO: should skip non-leading spaces
       indent: /[ ]{2}/,
-      punctuation: /[{}[\],\|\(\)]/,
+      // punctuation: /[{}[\],\|\(\)]/,
+      seperator: /[{}[\]\|\(\)]/,
       unknown: /(?!\s).+(?=\s*)/,
     });
 
-    Prism.hooks.add('after-tokenize', function(env) {
+    Prism.hooks.add('after-tokenize', function (env) {
       resetTokens(getLanguageAsSymbol(env));
       let lastProperty: string | number | symbol = 'root';
       // 当遇到 array 时，插入一个 placeholder symbol，用于在 arrayPrefix 数组中找到真实的 index 后替换
@@ -126,8 +141,8 @@ export function registerPlugin(uid: symbol) {
             ...prefix,
             lastProperty,
           ]
-            .filter(ele => ele !== '')
-            .map(ele =>
+            .filter((ele) => ele !== '')
+            .map((ele) =>
               typeof ele === 'symbol' ? arrayPrefix[arrayIndex++] : ele,
             )
             .join('.')}`.trim();
@@ -135,12 +150,12 @@ export function registerPlugin(uid: symbol) {
       }
     });
 
-    Prism.hooks.add('before-insert', env => {
+    Prism.hooks.add('before-insert', (env) => {
       resetTokens(getLanguageAsSymbol(env));
     });
 
     // exist property
-    Prism.hooks.add('wrap', env => {
+    Prism.hooks.add('wrap', (env) => {
       if (editorCacheMap.get(getLanguageAsSymbol(env))) {
         let { cache = [] } = editorCacheMap.get(getLanguageAsSymbol(env)) || {};
         if (env.type === 'property') {

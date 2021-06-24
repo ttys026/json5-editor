@@ -10,7 +10,7 @@ import React, {
   useState,
 } from 'react';
 import Editor from 'react-simple-code-editor';
-import Prism, { highlight, languages, Token } from 'prismjs';
+import Prism, { highlight, languages, Token, tokenize } from 'prismjs';
 import classNames from 'classnames';
 
 import { fillWithIndent, fillAfter } from './utils/autoComplete';
@@ -25,8 +25,8 @@ import { nextTick } from './utils/nextTick';
 import useUpdateEffect from './hooks/useUpdateEffect';
 import './style.less';
 import prettier from 'prettier/standalone';
-import parserBabel from './utils/parser-babel';
 import { endList, keywords, startList } from './constant';
+import { Traverse } from './utils/format';
 
 interface Props {
   initialValue?: string;
@@ -49,18 +49,15 @@ interface RefProps {
 
 const clearObjPathCache = (uid: symbol) => {
   Prism.hooks.run('before-insert', {
-    language: (uid as unknown) as string,
+    language: uid as unknown as string,
   });
 };
 
 export const formatJSON5 = (code: string) => {
-  return prettier.format(code || '', {
-    parser: 'json5',
-    quoteProps: 'preserve',
-    bracketSpacing: true,
-    // trade off with bundle size and prettier function
-    plugins: [parserBabel as any],
-  });
+  const tokens = tokenize(code, languages.json5);
+  const traverse = new Traverse(tokens);
+  traverse.format();
+  return traverse.getString();
 };
 
 export default memo(
@@ -159,7 +156,7 @@ export default memo(
           const currentLine = prefixOfCursor.slice(newLineStartIndex);
           const prefixOfLine = prefixOfCursor.slice(0, newLineStartIndex);
           const leadingWhiteSpace =
-            currentLine.split('').findIndex(ele => ele !== ' ') || 0;
+            currentLine.split('').findIndex((ele) => ele !== ' ') || 0;
 
           if (filled.some(Boolean)) {
             return;
@@ -177,7 +174,7 @@ export default memo(
                 ? rowValue.slice(0, commentSplitIndex)
                 : rowValue,
               commentSplitIndex !== -1 ? rowValue.slice(commentSplitIndex) : '',
-            ].map(ele => ele.trim());
+            ].map((ele) => ele.trim());
             if (!key) {
               // 缺少 key，则此行不是合法 property，不做处理
               return;
@@ -207,7 +204,7 @@ export default memo(
             const formattedProperty =
               `${rowKey}: ${formattedValue},${comments ? ` ${comments}` : ''}` +
               `\n${Array(leadingWhiteSpace + 1).join(' ')}`;
-            setCode(c => {
+            setCode((c) => {
               nextTick(() => {
                 textArea?.setSelectionRange(
                   startPos + formattedProperty.length - currentLine.length,
@@ -229,7 +226,7 @@ export default memo(
           if ((codeRef.current || '')[startPos - 1] === '/') {
             if ((codeRef.current || '')[startPos - 2] === ',') {
               ev.preventDefault();
-              setCode(c => {
+              setCode((c) => {
                 nextTick(() => {
                   textArea?.setSelectionRange(startPos + 3, startPos + 3);
                 });
@@ -274,95 +271,11 @@ export default memo(
       };
       // format on blur
       const blurHandler = (ev: FocusEvent) => {
-        if (ev.isTrusted) {
-          clearPairs(preElementRef.current!);
-        }
-
         const prevTokens = getTokens(editorUid.current);
-
-        const getFormattedLine = (
-          queue: Token[],
-          value: string,
-          index: number,
-        ) => {
-          if (index < 0) {
-            return value;
-          }
-          const trimed = value.trim();
-          const next = queue[index + 1];
-          if (
-            (next?.type === 'comment' ||
-              next?.type === 'punctuation' ||
-              (typeof next === 'string' && !(next as string).trim())) &&
-            trimed
-          ) {
-            return `"${trimed}"${next?.type === 'comment' ? '' : '\n'}`;
-          }
-          if (trimed) {
-            return `"${trimed}",\n`;
-          }
-          return value;
-        };
-
-        const tokens =
-          prevTokens?.reduce<Token[]>((acc, ele) => {
-            const prev = acc[acc.length - 1];
-            if (
-              prev?.type === 'number' &&
-              ((typeof ele === 'string' && (ele as string).trim()) ||
-                ele.type === 'unknown')
-            ) {
-              return [
-                ...acc.slice(0, acc.length - 1),
-                (`${prev.content}${
-                  typeof ele === 'string' ? ele : ele.content
-                }\n` as unknown) as Token,
-              ];
-            }
-            return [...acc, ele];
-          }, []) || [];
-
-        const getTokenStr = (tk: Token, index: number): string => {
-          if (typeof tk === 'string') {
-            return getFormattedLine(tokens, tk, index);
-          }
-          if (tk.type === 'unknown') {
-            return getFormattedLine(tokens, tk.content as string, index);
-          }
-          if (Array.isArray(tk.content)) {
-            return tk.content
-              .map(ele => getTokenStr(ele as Token, -1))
-              .join('');
-          }
-          return tk.content as string;
-        };
-
-        const tokenGeneratedCode = tokens
-          .map((ele, index) => getTokenStr(ele, index))
-          .join('');
-
-        let formatted = tokenGeneratedCode;
-        const emptyLinesRemoved = formatted!
-          .split('\n')
-          .filter(ele => !ele.split('').every(ele => ele === ' '))
-          .join('\n');
-
-        formatted = emptyLinesRemoved.endsWith(',')
-          ? emptyLinesRemoved.slice(0, emptyLinesRemoved.length - 1)
-          : emptyLinesRemoved;
-
-        try {
-          formatted = formatJSON5(formatted);
-          setHasFormatError(false);
-        } catch (e) {
-          // don't format
-          setHasFormatError(true);
-          if (process.env.NODE_ENV === 'development') {
-            console.log(JSON.stringify(e));
-          }
-        }
-
-        setCode(formatted);
+        const traverse = new Traverse(prevTokens!);
+        traverse.format();
+        const str = traverse.getString();
+        setCode(str);
       };
       // highlight active braces
       const cursorChangeHanlder = () => {
@@ -376,7 +289,7 @@ export default memo(
           codeRef.current
             .slice(startPos)
             .split('')
-            .filter(ele => ele === '"').length %
+            .filter((ele) => ele === '"').length %
             2 ===
           1
         ) {
@@ -386,7 +299,7 @@ export default memo(
           codeRef.current
             .slice(startPos)
             .split('')
-            .filter(ele => ele === "'").length %
+            .filter((ele) => ele === "'").length %
             2 ===
           1
         ) {
@@ -442,7 +355,7 @@ export default memo(
           disabled={shouldForbiddenEdit}
           placeholder={props.placeholder}
           onValueChange={setCode}
-          highlight={code => {
+          highlight={(code) => {
             setTimeout(() => {
               clearObjPathCache(editorUid.current);
             });
@@ -450,7 +363,7 @@ export default memo(
             return highlight(
               code,
               languages.json5,
-              (editorUid.current as unknown) as string,
+              editorUid.current as unknown as string,
             );
           }}
           padding={8}
