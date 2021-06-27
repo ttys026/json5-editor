@@ -20,9 +20,7 @@ interface EditorState {
   latestTokens: Token[];
 }
 
-const getLanguageAsSymbol = (
-  env: hooks.RequiredEnvironment<'language', Environment>,
-) => {
+const getLanguageAsSymbol = (env: hooks.RequiredEnvironment<'language', Environment>) => {
   return env.language as unknown as symbol;
 };
 
@@ -81,13 +79,12 @@ export function registerPlugin(uid: symbol) {
     ];
     // extends unquoted property to support * and ? at end.
     nextPropertyRegex[1] = {
-      pattern:
-        /(?!\s)[_$a-zA-Z\xA0-\uFFFF\*](?:(?!\s)[$\w\xA0-\uFFFF\*\?])*(?=\s*:)/,
+      pattern: /(?!\s)[_$a-zA-Z\xA0-\uFFFF\*](?:(?!\s)[$\w\xA0-\uFFFF\*\?])*(?=\s*:)/,
       alias: 'unquoted',
     };
     Prism.languages.json5 = Prism.languages.extend('json5', {
       property: nextPropertyRegex,
-      linebreak: /\n/,
+      linebreak: /\r?\n/,
       // TODO: should skip non-leading spaces
       indent: /[ ]{2}/,
       // punctuation: /[{}[\],\|\(\)]/,
@@ -137,14 +134,9 @@ export function registerPlugin(uid: symbol) {
         if (env.tokens[i].type === 'property') {
           lastProperty = getInnerContent(env.tokens[i].content);
           let arrayIndex = 0;
-          env.tokens[i].alias = `${env.tokens[i].alias || ''} ${[
-            ...prefix,
-            lastProperty,
-          ]
+          env.tokens[i].alias = `${env.tokens[i].alias || ''} ${[...prefix, lastProperty]
             .filter((ele) => ele !== '')
-            .map((ele) =>
-              typeof ele === 'symbol' ? arrayPrefix[arrayIndex++] : ele,
-            )
+            .map((ele) => (typeof ele === 'symbol' ? arrayPrefix[arrayIndex++] : ele))
             .join('.')}`.trim();
         }
       }

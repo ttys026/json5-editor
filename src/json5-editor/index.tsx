@@ -1,26 +1,11 @@
-import React, {
-  forwardRef,
-  memo,
-  Ref,
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import React, { forwardRef, memo, Ref, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import Editor from 'react-simple-code-editor';
 import Prism, { highlight, languages, Token, tokenize } from 'prismjs';
 import classNames from 'classnames';
 
 import { fillWithIndent, fillAfter } from './utils/autoComplete';
 import { activePairs, clearPairs } from './utils/match';
-import {
-  getTokenAtIndex,
-  getTokens,
-  registerPlugin,
-  unRegisterPlugin,
-} from './utils/prism';
+import { getTokenAtIndex, getTokens, registerPlugin, unRegisterPlugin } from './utils/prism';
 import { nextTick } from './utils/nextTick';
 import useUpdateEffect from './hooks/useUpdateEffect';
 import './style.less';
@@ -147,16 +132,12 @@ export default memo(
 
         if (ev.code === 'Enter' && !ev.isComposing) {
           // 如果选中了文字，则不做特殊处理
-          const filled = [
-            fillWithIndent(textArea, '{', '}', codeRef.current, setCode, ev),
-            fillWithIndent(textArea, '[', ']', codeRef.current, setCode, ev),
-          ];
+          const filled = [fillWithIndent(textArea, '{', '}', codeRef.current, setCode, ev), fillWithIndent(textArea, '[', ']', codeRef.current, setCode, ev)];
           const prefixOfCursor = codeRef.current.slice(0, startPos);
           const newLineStartIndex = prefixOfCursor.lastIndexOf('\n') + 1;
           const currentLine = prefixOfCursor.slice(newLineStartIndex);
           const prefixOfLine = prefixOfCursor.slice(0, newLineStartIndex);
-          const leadingWhiteSpace =
-            currentLine.split('').findIndex((ele) => ele !== ' ') || 0;
+          const leadingWhiteSpace = currentLine.split('').findIndex((ele) => ele !== ' ') || 0;
 
           if (filled.some(Boolean)) {
             return;
@@ -168,13 +149,9 @@ export default memo(
             const regexRet = /([^:]*):(.+)/.exec(currentLine);
             const [, rowKey = '', rowValue = ''] = regexRet || [];
             const commentSplitIndex = rowValue.lastIndexOf('//');
-            const [key, value, comments] = [
-              rowKey,
-              commentSplitIndex !== -1
-                ? rowValue.slice(0, commentSplitIndex)
-                : rowValue,
-              commentSplitIndex !== -1 ? rowValue.slice(commentSplitIndex) : '',
-            ].map((ele) => ele.trim());
+            const [key, value, comments] = [rowKey, commentSplitIndex !== -1 ? rowValue.slice(0, commentSplitIndex) : rowValue, commentSplitIndex !== -1 ? rowValue.slice(commentSplitIndex) : ''].map(
+              (ele) => ele.trim(),
+            );
             if (!key) {
               // 缺少 key，则此行不是合法 property，不做处理
               return;
@@ -184,38 +161,17 @@ export default memo(
               return;
             }
             ev.preventDefault();
-            const valueWithoutTrailingComma = value.endsWith(',')
-              ? value.slice(0, value.length - 1)
-              : value;
+            const valueWithoutTrailingComma = value.endsWith(',') ? value.slice(0, value.length - 1) : value;
             const needConvertValue = (val: string) => {
-              return (
-                isNaN(Number(val)) &&
-                !val.includes('[') &&
-                !val.includes('{') &&
-                !val.includes('"') &&
-                !val.includes('|') &&
-                !val.includes("'") &&
-                !keywords.includes(val)
-              );
+              return isNaN(Number(val)) && !val.includes('[') && !val.includes('{') && !val.includes('"') && !val.includes('|') && !val.includes("'") && !keywords.includes(val);
             };
-            const formattedValue = needConvertValue(valueWithoutTrailingComma)
-              ? `"${valueWithoutTrailingComma}"`
-              : valueWithoutTrailingComma;
-            const formattedProperty =
-              `${rowKey}: ${formattedValue},${comments ? ` ${comments}` : ''}` +
-              `\n${Array(leadingWhiteSpace + 1).join(' ')}`;
+            const formattedValue = needConvertValue(valueWithoutTrailingComma) ? `"${valueWithoutTrailingComma}"` : valueWithoutTrailingComma;
+            const formattedProperty = `${rowKey}: ${formattedValue},${comments ? ` ${comments}` : ''}` + `\n${Array(leadingWhiteSpace + 1).join(' ')}`;
             setCode((c) => {
               nextTick(() => {
-                textArea?.setSelectionRange(
-                  startPos + formattedProperty.length - currentLine.length,
-                  startPos + formattedProperty.length - currentLine.length,
-                );
+                textArea?.setSelectionRange(startPos + formattedProperty.length - currentLine.length, startPos + formattedProperty.length - currentLine.length);
               });
-              return [
-                prefixOfLine,
-                formattedProperty,
-                c.slice(newLineStartIndex + currentLine.length),
-              ].join('');
+              return [prefixOfLine, formattedProperty, c.slice(newLineStartIndex + currentLine.length)].join('');
             });
           } catch (e) {
             // do nothing
@@ -230,12 +186,7 @@ export default memo(
                 nextTick(() => {
                   textArea?.setSelectionRange(startPos + 3, startPos + 3);
                 });
-                return [
-                  c.slice(0, startPos - 2),
-                  ', ',
-                  '// ',
-                  c.slice(startPos),
-                ].join('');
+                return [c.slice(0, startPos - 2), ', ', '// ', c.slice(startPos)].join('');
               });
             } else {
               nextTick(() => {
@@ -254,11 +205,7 @@ export default memo(
         if (ev.key === '|') {
           ev.preventDefault();
           window.requestAnimationFrame(() => {
-            document.execCommand(
-              'insertText',
-              false,
-              `${codeRef.current[startPos - 1] === ' ' ? '' : ' '}| `,
-            );
+            document.execCommand('insertText', false, `${codeRef.current[startPos - 1] === ' ' ? '' : ' '}| `);
           });
         }
 
@@ -276,6 +223,15 @@ export default memo(
         traverse.format();
         const str = traverse.getString();
         setCode(str);
+        try {
+          traverse.validate({ mode: 'loose' });
+          setHasFormatError(false);
+        } catch (e) {
+          setHasFormatError(true);
+          if (process.env.NODE_ENV === 'development') {
+            console.log(e);
+          }
+        }
       };
       // highlight active braces
       const cursorChangeHanlder = () => {
@@ -337,19 +293,11 @@ export default memo(
     }, []);
 
     return (
-      <div
-        className={classNames(
-          'json5-editor-wrapper',
-          hasFormatError ? 'json5-editor-wrapper-has-error' : '',
-          props.className,
-          props.disabled ? 'json5-editor-wrapper-disabled' : '',
-        )}
-      >
+      <div className={classNames('json5-editor-wrapper', hasFormatError ? 'json5-editor-wrapper-has-error' : '', props.className, props.disabled ? 'json5-editor-wrapper-disabled' : '')}>
         <Editor
           ref={(r: any) => {
             textAreaRef.current = r?._input;
-            preElementRef.current = textAreaRef.current
-              ?.nextElementSibling as HTMLPreElement;
+            preElementRef.current = textAreaRef.current?.nextElementSibling as HTMLPreElement;
           }}
           value={code}
           disabled={shouldForbiddenEdit}
@@ -360,16 +308,11 @@ export default memo(
               clearObjPathCache(editorUid.current);
             });
             // HACK: highlight 的 ts 类型是 string，但传递 symbol 作为 editor 的唯一 id，此处 cast 为一个错误类型，但是有意为之
-            return highlight(
-              code,
-              languages.json5,
-              editorUid.current as unknown as string,
-            );
+            return highlight(code, languages.json5, editorUid.current as unknown as string);
           }}
           padding={8}
           style={{
-            fontFamily:
-              'SFMono-Regular,Consolas,Liberation Mono,Menlo,monospace',
+            fontFamily: 'SFMono-Regular,Consolas,Liberation Mono,Menlo,monospace',
             fontSize: 14,
             lineHeight: 1.5,
             ...props.style,
