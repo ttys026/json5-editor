@@ -88,6 +88,7 @@ export class Traverse {
           !(ele.type === 'unknown' && this.resolveTokenContent(ele.content).trim() === '') &&
           // consequential space will become indent
           (ele as Token).type !== 'indent' &&
+          (ele as Token).type !== 'leading' &&
           // filter out commas, we will add it back later
           (ele as Token).content !== ',',
       )

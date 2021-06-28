@@ -1,15 +1,13 @@
 import React, { forwardRef, memo, Ref, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import Editor from 'react-simple-code-editor';
-import Prism, { highlight, languages, Token, tokenize } from 'prismjs';
+import Prism, { highlight, tokenize } from 'prismjs/components/prism-core';
 import classNames from 'classnames';
-
 import { fillWithIndent, fillAfter } from './utils/autoComplete';
 import { activePairs, clearPairs } from './utils/match';
-import { getTokenAtIndex, getTokens, registerPlugin, unRegisterPlugin } from './utils/prism';
+import { getTokenAtIndex, getTokens, registerPlugin, unRegisterPlugin, lex } from './utils/prism';
 import { nextTick } from './utils/nextTick';
 import useUpdateEffect from './hooks/useUpdateEffect';
 import './style.less';
-import prettier from 'prettier/standalone';
 import { endList, keywords, startList } from './constant';
 import { Traverse } from './utils/format';
 
@@ -39,7 +37,7 @@ const clearObjPathCache = (uid: symbol) => {
 };
 
 export const formatJSON5 = (code: string) => {
-  const tokens = tokenize(code, languages.json5);
+  const tokens = tokenize(code, lex);
   const traverse = new Traverse(tokens);
   traverse.format();
   return traverse.getString();
@@ -308,7 +306,7 @@ export default memo(
               clearObjPathCache(editorUid.current);
             });
             // HACK: highlight 的 ts 类型是 string，但传递 symbol 作为 editor 的唯一 id，此处 cast 为一个错误类型，但是有意为之
-            return highlight(code, languages.json5, editorUid.current as unknown as string);
+            return highlight(code, lex, editorUid.current as unknown as string);
           }}
           padding={8}
           style={{

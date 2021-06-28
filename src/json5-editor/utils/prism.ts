@@ -1,12 +1,39 @@
 /* eslint-disable */
-import Prism, { hooks, Environment, Token } from 'prismjs';
-
-// 参考 1：https://prismjs.com/test.html#language=json5 // inspect element to check deps and its order
-// 参考 2：https://prismjs.com/extending.html#resolving-dependencies
-import 'prismjs/components/prism-markup.min.js';
-import 'prismjs/components/prism-json.min.js';
-import 'prismjs/components/prism-json5.min.js';
+import Prism from 'prismjs/components/prism-core';
 import { endList, startList } from '../constant';
+
+export const lex: Prism.Grammar = {
+  property: [
+    { pattern: /("|')(?:\\(?:\r\n?|\n|.)|(?!\1)[^\\\r\n])*\1\*?(?=\s*:)/g, greedy: true },
+    { pattern: /(?!\s)[_$a-zA-Z\xA0-\uFFFF\*](?:(?!\s)[$\w\xA0-\uFFFF\*\?])*(?=\s*:)/, alias: 'unquoted' },
+  ],
+  string: {
+    pattern: /("|')(?:\\(?:\r\n?|\n|.)|(?!\1)[^\\\r\n])*\1/g,
+    greedy: true,
+  },
+  comment: {
+    pattern: /\/\/.*|\/\*[\s\S]*?(?:\*\/|$)/g,
+    greedy: true,
+  },
+  number: /[+-]?\b(?:NaN|Infinity|0x[a-fA-F\d]+)\b|[+-]?(?:\b\d+(?:\.\d*)?|\B\.\d+)(?:[eE][+-]?\d+\b)?/,
+  punctuation: /[{}[\],]/,
+  operator: /:/,
+  boolean: /\b(?:true|false)\b/,
+  null: {
+    alias: 'keyword',
+    pattern: /\bnull\b/,
+  },
+  leading: {
+    pattern: /^\s*/gm,
+    greedy: true,
+    inside: {
+      indent: /[ ]{2}/,
+    },
+  },
+  linebreak: /\r?\n/,
+  seperator: /[{}[\]\|\(\)]/,
+  unknown: /(?!\s).+(?=\s*)/,
+};
 
 const getInnerContent = (str: string) => {
   if (str.startsWith('"') || str.startsWith("'")) {
@@ -17,14 +44,14 @@ const getInnerContent = (str: string) => {
 
 interface EditorState {
   cache: string[];
-  latestTokens: Token[];
+  latestTokens: Prism.Token[];
 }
 
-const getLanguageAsSymbol = (env: hooks.RequiredEnvironment<'language', Environment>) => {
+const getLanguageAsSymbol = (env: Prism.hooks.RequiredEnvironment<'language', Prism.Environment>) => {
   return env.language as unknown as symbol;
 };
 
-const cacheTokens = (uid: symbol, tokens: Token[]) => {
+const cacheTokens = (uid: symbol, tokens: Prism.Token[]) => {
   setTimeout(() => {
     // 如果已经被卸载了，则不重新缓存 tokens
     if (editorCacheMap.has(uid)) {
@@ -71,27 +98,6 @@ export function registerPlugin(uid: symbol) {
 
   // before-insert is a self registered hook that can determine first time registration
   if (!((Prism.hooks.all || {})['before-insert'] || []).length) {
-    const nextPropertyRegex = [
-      ...(Prism.languages.json5.property as {
-        pattern: RegExp;
-        alias?: string;
-      }[]),
-    ];
-    // extends unquoted property to support * and ? at end.
-    nextPropertyRegex[1] = {
-      pattern: /(?!\s)[_$a-zA-Z\xA0-\uFFFF\*](?:(?!\s)[$\w\xA0-\uFFFF\*\?])*(?=\s*:)/,
-      alias: 'unquoted',
-    };
-    Prism.languages.json5 = Prism.languages.extend('json5', {
-      property: nextPropertyRegex,
-      linebreak: /\r?\n/,
-      // TODO: should skip non-leading spaces
-      indent: /[ ]{2}/,
-      // punctuation: /[{}[\],\|\(\)]/,
-      seperator: /[{}[\]\|\(\)]/,
-      unknown: /(?!\s).+(?=\s*)/,
-    });
-
     Prism.hooks.add('after-tokenize', function (env) {
       resetTokens(getLanguageAsSymbol(env));
       let lastProperty: string | number | symbol = 'root';
