@@ -265,12 +265,16 @@ export class Traverse {
    * only append comma if necessary
    */
   protected appendComma() {
-    // get one token ahead of comma
-    const ahead = this.lookAhead(true);
+    // get 2 tokens ahead of comma
+    const [ahead, ahead2] = this.lookAheadDeep({ deepth: 2, skipWhitespace: true });
 
     if (ahead) {
+      let next = this.resolveTokenContent(ahead.content);
+      if (ahead.type === 'comment' && ahead2) {
+        next = this.resolveTokenContent(ahead2.content);
+      }
       // remove comma of last item in object and array.
-      if (!['}', ']', '|', '(', ')'].includes(this.resolveTokenContent(ahead.content))) {
+      if (!['}', ']', '|', '(', ')'].includes(next)) {
         this.output += ',';
       }
       // add new line when start a new property/item in object/array,
