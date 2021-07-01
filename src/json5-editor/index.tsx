@@ -1,17 +1,17 @@
 import React, { forwardRef, memo, Ref, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import Editor from 'react-simple-code-editor';
-import Prism, { highlight, tokenize } from 'prismjs/components/prism-core';
+import { tokenize, util } from 'prismjs/components/prism-core';
 import classNames from 'classnames';
-import { fillWithIndent, fillAfter } from './utils/autoComplete';
+// TODO: need fork react-simple-code-editor's code to disable auto complete
+// @ts-expect-error
+import Editor from './Editor';
+import { endList, startList } from './constant';
+import { getLinesByPos, insertText, generateWhiteSpace, getTokensOfCurrentLine, getCurrentTokenIndex, isToken, getTokenContent, tokenContentEquals, getLengthOfToken } from './utils/autoComplete';
 import { activePairs, clearPairs } from './utils/match';
-import { getTokenAtIndex, getTokens, registerPlugin, unRegisterPlugin, lex } from './utils/prism';
-import { nextTick } from './utils/nextTick';
-import useUpdateEffect from './hooks/useUpdateEffect';
-import './style.less';
-import { endList, keywords, startList } from './constant';
+import { lex, afterTokenizeHook, tokenStreamToHtml } from './utils/prism';
 import { Traverse } from './utils/format';
-
-interface Props {
+import useControllableValue from './hooks/useControllableValue';
+import './style.less';
+export interface Props {
   initialValue?: string;
   value?: string;
   onChange?: (v: string) => void;
@@ -22,19 +22,13 @@ interface Props {
   readOnly?: boolean;
 }
 
-interface RefProps {
+export interface RefProps {
   editorRef: HTMLTextAreaElement | null;
   preRef: HTMLPreElement | null;
   value: string;
   onChange: React.Dispatch<React.SetStateAction<string>>;
   format: () => void;
 }
-
-const clearObjPathCache = (uid: symbol) => {
-  Prism.hooks.run('before-insert', {
-    language: uid as unknown as string,
-  });
-};
 
 export const formatJSON5 = (code: string) => {
   const tokens = tokenize(code, lex);
@@ -47,15 +41,14 @@ export default memo(
   forwardRef((props: Props, ref: Ref<RefProps>) => {
     const textAreaRef = useRef<HTMLTextAreaElement | null>(null);
     const preElementRef = useRef<HTMLPreElement | null>(null);
-    const [code, setCode] = useState<string>(props.initialValue || '');
     const [hasFormatError, setHasFormatError] = useState(false);
-    const { value = '', onChange } = props;
-    const skipNextOnchange = useRef(true);
-    // 支持多例，隔离 prism hook 间影响
-    const editorUid = useRef(Symbol());
-    const shouldForbiddenEdit = props.disabled || props.readOnly;
+    const [code, setCode] = useControllableValue<string>(props);
+    const shouldForbiddenEdit = props.disabled || props.readOnly || ('value' in props && !('onChange' in props));
+    const tokensRef = useRef<(Prism.Token | string)[]>([]);
+    const previousKeyboardEvent = useRef<KeyboardEvent | null>(null);
 
     const codeRef = useRef(code);
+    codeRef.current = code;
 
     useEffect(() => {
       if (shouldForbiddenEdit) {
@@ -87,32 +80,6 @@ export default memo(
       format,
     }));
 
-    useMemo(() => {
-      // 确保首次调用 highligh 时就能触发 hook
-      registerPlugin(editorUid.current);
-    }, []);
-
-    useEffect(() => {
-      if ('value' in props) {
-        setCode(value || '');
-        clearObjPathCache(editorUid.current);
-      }
-      skipNextOnchange.current = true;
-    }, [value || '']);
-
-    useUpdateEffect(() => {
-      // cast to wrong type to keep each editor unique
-      clearObjPathCache(editorUid.current);
-      skipNextOnchange.current = false;
-    }, [code || '']);
-
-    useEffect(() => {
-      if (onChange && !skipNextOnchange.current && code !== codeRef.current) {
-        onChange(code);
-      }
-      codeRef.current = code;
-    }, [code, onChange]);
-
     useEffect(() => {
       const textArea = textAreaRef.current!;
       // special char key down
@@ -122,102 +89,12 @@ export default memo(
         if (startPos !== endPos) {
           return;
         }
-
-        const currentToken = getTokenAtIndex(editorUid.current, startPos);
-        if (currentToken?.type === 'string') {
-          return;
-        }
-
-        if (ev.code === 'Enter' && !ev.isComposing) {
-          // 如果选中了文字，则不做特殊处理
-          const filled = [fillWithIndent(textArea, '{', '}', codeRef.current, setCode, ev), fillWithIndent(textArea, '[', ']', codeRef.current, setCode, ev)];
-          const prefixOfCursor = codeRef.current.slice(0, startPos);
-          const newLineStartIndex = prefixOfCursor.lastIndexOf('\n') + 1;
-          const currentLine = prefixOfCursor.slice(newLineStartIndex);
-          const prefixOfLine = prefixOfCursor.slice(0, newLineStartIndex);
-          const leadingWhiteSpace = currentLine.split('').findIndex((ele) => ele !== ' ') || 0;
-
-          if (filled.some(Boolean)) {
-            return;
-          }
-
-          try {
-            // 浏览器兼容性考虑，不使用 lookbehind
-            // const regexRet = /(.*):((?:(?!\/\/).)+)(\/\/.*)?/.exec(currentLine);
-            const regexRet = /([^:]*):(.+)/.exec(currentLine);
-            const [, rowKey = '', rowValue = ''] = regexRet || [];
-            const commentSplitIndex = rowValue.lastIndexOf('//');
-            const [key, value, comments] = [rowKey, commentSplitIndex !== -1 ? rowValue.slice(0, commentSplitIndex) : rowValue, commentSplitIndex !== -1 ? rowValue.slice(commentSplitIndex) : ''].map(
-              (ele) => ele.trim(),
-            );
-            if (!key) {
-              // 缺少 key，则此行不是合法 property，不做处理
-              return;
-            }
-            if (!value) {
-              // 缺少 value property，不做处理
-              return;
-            }
-            ev.preventDefault();
-            const valueWithoutTrailingComma = value.endsWith(',') ? value.slice(0, value.length - 1) : value;
-            const needConvertValue = (val: string) => {
-              return isNaN(Number(val)) && !val.includes('[') && !val.includes('{') && !val.includes('"') && !val.includes('|') && !val.includes("'") && !keywords.includes(val);
-            };
-            const formattedValue = needConvertValue(valueWithoutTrailingComma) ? `"${valueWithoutTrailingComma}"` : valueWithoutTrailingComma;
-            const formattedProperty = `${rowKey}: ${formattedValue},${comments ? ` ${comments}` : ''}` + `\n${Array(leadingWhiteSpace + 1).join(' ')}`;
-            setCode((c) => {
-              nextTick(() => {
-                textArea?.setSelectionRange(startPos + formattedProperty.length - currentLine.length, startPos + formattedProperty.length - currentLine.length);
-              });
-              return [prefixOfLine, formattedProperty, c.slice(newLineStartIndex + currentLine.length)].join('');
-            });
-          } catch (e) {
-            // do nothing
-          }
-        }
-
-        if (ev.code === 'Slash') {
-          if ((codeRef.current || '')[startPos - 1] === '/') {
-            if ((codeRef.current || '')[startPos - 2] === ',') {
-              ev.preventDefault();
-              setCode((c) => {
-                nextTick(() => {
-                  textArea?.setSelectionRange(startPos + 3, startPos + 3);
-                });
-                return [c.slice(0, startPos - 2), ', ', '// ', c.slice(startPos)].join('');
-              });
-            } else {
-              nextTick(() => {
-                document.execCommand('insertText', false, ' ');
-              });
-            }
-          }
-        }
-
-        if (ev.key === ':') {
-          window.requestAnimationFrame(() => {
-            document.execCommand('insertText', false, ' ');
-          });
-        }
-
-        if (ev.key === '|') {
-          ev.preventDefault();
-          window.requestAnimationFrame(() => {
-            document.execCommand('insertText', false, `${codeRef.current[startPos - 1] === ' ' ? '' : ' '}| `);
-          });
-        }
-
-        if (ev.key === '"') {
-          fillAfter(textArea, '"');
-        }
-        if (ev.key === "'") {
-          fillAfter(textArea, "'");
-        }
+        previousKeyboardEvent.current = ev;
       };
       // format on blur
       const blurHandler = (ev: FocusEvent) => {
-        const prevTokens = getTokens(editorUid.current);
-        const traverse = new Traverse(prevTokens!);
+        const prevTokens = tokensRef.current;
+        const traverse = new Traverse(prevTokens);
         traverse.format();
         const str = traverse.getString();
         setCode(str);
@@ -231,6 +108,7 @@ export default memo(
           }
         }
       };
+
       // highlight active braces
       const cursorChangeHanlder = () => {
         const startPos = textArea?.selectionStart || 0;
@@ -281,7 +159,6 @@ export default memo(
       textArea?.addEventListener('click', cursorChangeHanlder);
       return () => {
         // 卸载 hook
-        unRegisterPlugin(editorUid.current);
         textArea?.removeEventListener('keydown', keyDownHandler);
         textArea?.removeEventListener('blur', blurHandler);
         textArea?.removeEventListener('focus', focusHandler);
@@ -289,6 +166,129 @@ export default memo(
         textArea?.removeEventListener('click', cursorChangeHanlder);
       };
     }, []);
+
+    const autoFill = (env: Prism.Environment & { tokens: (Prism.Token | string)[] }) => {
+      const textArea = textAreaRef.current!;
+      const startPos = textArea?.selectionStart || 0;
+      const endPos = textArea?.selectionEnd || 0;
+      if (startPos !== endPos) {
+        return;
+      }
+      const ev = previousKeyboardEvent.current;
+      previousKeyboardEvent.current = null;
+      const tokenIndex = getCurrentTokenIndex(env.tokens, startPos);
+      const current = env.tokens[tokenIndex];
+
+      outer: switch (true) {
+        case ev?.code === 'Enter' && !ev?.isComposing: {
+          const pairs = [
+            ['{', '}'],
+            ['[', ']'],
+            ['(', ')'],
+          ];
+          inner: for (let [start, end] of pairs) {
+            let previousList = getTokensOfCurrentLine(env.tokens, startPos - 1);
+            previousList = previousList.filter((tok) => getTokenContent(tok).trim() && isToken(tok) && tok.type !== 'comment');
+            const lastToken = previousList.pop();
+            if (tokenContentEquals(lastToken, start)) {
+              requestAnimationFrame(() => {
+                const { leadingWhiteSpace, previousLine, currentLine } = getLinesByPos(codeRef.current, startPos);
+                const codeArray = codeRef.current.split('');
+                // start count !== end count, then append
+                const needFill = codeArray.filter((ele) => ele === start).length !== codeArray.filter((ele) => ele === end).length;
+                if (needFill) {
+                  insertText(`${generateWhiteSpace(leadingWhiteSpace + 2)}\n${generateWhiteSpace(leadingWhiteSpace)}${end}`);
+                  textArea?.setSelectionRange(startPos + leadingWhiteSpace + 2, startPos + leadingWhiteSpace + 2);
+                } else {
+                  const currentStr = codeRef.current.split('')[startPos];
+                  const nextStr = codeRef.current.split('')[startPos + 1];
+                  if (currentStr === end && [undefined, '\n'].includes(nextStr)) {
+                    insertText(`${generateWhiteSpace(leadingWhiteSpace + 2)}\n${generateWhiteSpace(leadingWhiteSpace)}`);
+                    textArea?.setSelectionRange(textArea?.selectionStart - 1 - leadingWhiteSpace, textArea?.selectionStart - 1 - leadingWhiteSpace);
+                  } else {
+                    insertText(`${generateWhiteSpace(leadingWhiteSpace + 2)}`);
+                  }
+                }
+              });
+              break outer;
+            }
+          }
+
+          // general case, add same indent space as previous line
+          requestAnimationFrame(() => {
+            const { leadingWhiteSpace } = getLinesByPos(codeRef.current, startPos);
+            const fullList = getTokensOfCurrentLine(env.tokens, startPos - 1);
+
+            const tokenList = fullList.filter((ele) => isToken(ele) && ele.type !== 'comment' && getTokenContent(ele).trim());
+            const whiteSpace = generateWhiteSpace(leadingWhiteSpace);
+
+            if (tokenList.length === 0) {
+              insertText(whiteSpace);
+              return;
+            }
+
+            if (tokenList.length === 2 && tokenContentEquals(tokenList[0], '{') && tokenContentEquals(tokenList[1], '}')) {
+            }
+
+            const fullListLength = getLengthOfToken(fullList);
+            // const type = fullList.some(tok => tokenContentEquals(tok, '}') || tokenContentEquals(tok, ']')) ? 'whole' : 'segment';
+            const formatted = new Traverse(fullList, { type: 'segment' }).format();
+
+            textArea?.setSelectionRange(startPos - fullListLength - 1, startPos);
+
+            const lines = formatted.split('\n');
+            const insert = lines.map((line) => `${whiteSpace}${line}`).join('\n');
+            insertText(`${insert}\n${whiteSpace}`);
+          });
+          break;
+        }
+        case ev?.key === ':' && tokenContentEquals(current, ':'): {
+          requestAnimationFrame(() => {
+            const line = getTokensOfCurrentLine(tokensRef.current, startPos).filter((tok) => getTokenContent(tok).trim());
+            if (line.length === 2 && isToken(line[0]) && line[0].type === 'property') {
+              insertText(' ');
+            }
+          });
+          break;
+        }
+        case ev?.key === '/' && isToken(current) && current.type === 'comment' && tokenContentEquals(current, '//'): {
+          requestAnimationFrame(() => {
+            let { leadingWhiteSpace } = getLinesByPos(codeRef.current, startPos);
+            const fullList = getTokensOfCurrentLine(env.tokens, startPos);
+            const fullListLength = getLengthOfToken(fullList);
+            const previousList = getTokensOfCurrentLine(env.tokens, startPos - fullListLength - 1);
+            leadingWhiteSpace = previousList.some((tok) => isToken(tok) && tokenContentEquals(tok, '{')) && startPos !== fullListLength ? leadingWhiteSpace + 2 : leadingWhiteSpace;
+            const formatted = new Traverse(fullList, { type: 'segment' }).format();
+            textArea?.setSelectionRange(startPos - fullListLength, startPos);
+            const whiteSpace = generateWhiteSpace(leadingWhiteSpace);
+            insertText(`${whiteSpace}${formatted} `);
+          });
+          break;
+        }
+        case !Date.now(): {
+          break;
+        }
+        case ev?.key === '|' && isToken(current) && tokenContentEquals(current, '|'): {
+          requestAnimationFrame(() => {
+            textArea?.setSelectionRange(startPos - 1, startPos);
+            insertText(' | ');
+          });
+          break;
+        }
+        case true: {
+          break;
+        }
+        case true: {
+          break;
+        }
+        case true: {
+          break;
+        }
+        default: {
+          // do nothing, your code is perfect and has nothing to format
+        }
+      }
+    };
 
     return (
       <div className={classNames('json5-editor-wrapper', hasFormatError ? 'json5-editor-wrapper-has-error' : '', props.className, props.disabled ? 'json5-editor-wrapper-disabled' : '')}>
@@ -301,12 +301,19 @@ export default memo(
           disabled={shouldForbiddenEdit}
           placeholder={props.placeholder}
           onValueChange={setCode}
-          highlight={(code) => {
-            setTimeout(() => {
-              clearObjPathCache(editorUid.current);
-            });
-            // HACK: highlight 的 ts 类型是 string，但传递 symbol 作为 editor 的唯一 id，此处 cast 为一个错误类型，但是有意为之
-            return highlight(code, lex, editorUid.current as unknown as string);
+          highlight={(code: string) => {
+            const env: Prism.Environment & { tokens: (Prism.Token | string)[] } = {
+              code,
+              grammar: lex,
+              language: 'json5',
+              tokens: [],
+            };
+            env.tokens = tokenize(code, lex);
+            afterTokenizeHook(env);
+            const htmlString = tokenStreamToHtml(util.encode(env.tokens), env.language!);
+            autoFill(env);
+            tokensRef.current = env.tokens;
+            return htmlString;
           }}
           padding={8}
           style={{

@@ -1,6 +1,11 @@
 import type { Token, TokenStream } from 'prismjs';
+import { startList, endList } from '../constant';
 
 type CookedToken = Token & { index: number; lineNo?: number; columnNo?: number };
+
+export interface Config {
+  type: 'whole' | 'segment';
+}
 
 class ValidateError extends Error {
   public lineNo: string;
@@ -32,9 +37,15 @@ export class Traverse {
   private currentIndex = 0;
   private output = '';
   private indentSize = 2;
-  private valueTypes = ['string', 'number', 'boolean', 'unknown'];
+  private valueTypes = ['string', 'number', 'boolean', 'null', 'unknown'];
+  private config: Config = {
+    type: 'whole',
+  };
 
-  constructor(tokens: (Token | string)[]) {
+  constructor(tokens: (Token | string)[], config?: Config) {
+    if (config) {
+      this.config = config;
+    }
     this.rawTokens = tokens;
     this.cookTokens();
   }
@@ -268,7 +279,6 @@ export class Traverse {
   protected appendComma() {
     // get 2 tokens ahead of comma
     const [ahead, ahead2] = this.lookAheadDeep({ deepth: 2, skipWhitespace: true });
-
     if (ahead) {
       let next = this.resolveTokenContent(ahead.content);
       if (ahead.type === 'comment' && ahead2) {
@@ -279,9 +289,12 @@ export class Traverse {
         this.output += ',';
       }
       // add new line when start a new property/item in object/array,
-      if (ahead.content === '[' || ahead.content === '{' || ['number', 'boolean', 'string', 'unknown'].includes(ahead.type)) {
+      if (startList.includes(ahead.content) || ['number', 'boolean', 'string', 'unknown'].includes(ahead.type)) {
         this.addNewLine();
       }
+    }
+    if (this.config.type === 'segment' && !ahead) {
+      this.output += ',';
     }
   }
 
@@ -320,6 +333,8 @@ export class Traverse {
     }
     const { mode = 'strict' } = param || {};
     const { lines } = this;
+    let objectDeepth = 0;
+    let arrayDeepth = 0;
     let parentPunctuations: typeof lines[0] = [];
     outer: for (let i = 0; i < lines.length; i++) {
       const line = this.lines[i] || [];
@@ -329,6 +344,7 @@ export class Traverse {
         // const columnNo = token +
         condition: switch (true) {
           case this.resolveTokenContent(token.content) === '{': {
+            objectDeepth += 1;
             const previousPunctuation = parentPunctuations[parentPunctuations.length - 1];
             if (previousPunctuation?.content === '{' && this.isPropertyLine(line) && column === 2) {
               parentPunctuations.push(token);
@@ -340,6 +356,10 @@ export class Traverse {
             break;
           }
           case this.resolveTokenContent(token.content) === '}': {
+            objectDeepth -= 1;
+            if (objectDeepth === 0 && (i !== lines.length - 1 || column !== line.length - 1)) {
+              throw new ValidateError({ token });
+            }
             const last = parentPunctuations.pop();
             if (last?.content !== '{' || column !== 0) {
               throw new ValidateError({ token });
@@ -347,6 +367,7 @@ export class Traverse {
             break;
           }
           case this.resolveTokenContent(token.content) === '[': {
+            arrayDeepth += 1;
             const previousPunctuation = parentPunctuations[parentPunctuations.length - 1];
             if (previousPunctuation?.content === '{' && this.isPropertyLine(line) && column === 2) {
               parentPunctuations.push(token);
@@ -358,6 +379,10 @@ export class Traverse {
             break;
           }
           case this.resolveTokenContent(token.content) === ']': {
+            arrayDeepth -= 1;
+            if (arrayDeepth === 0 && (i !== lines.length - 1 || column !== line.length - 1)) {
+              throw new ValidateError({ token });
+            }
             const last = parentPunctuations.pop();
             if (last?.content !== '[' || column !== 0) {
               throw new ValidateError({ token });
@@ -453,19 +478,18 @@ export class Traverse {
       this.currentIndex = index;
       switch (true) {
         case token.content === '{': {
-          //
           this.commitOutputTransaction(() => {
             this.addTokenToCurrentLine();
             this.output += this.resolveTokenContent(token.content);
           });
-          //
           this.addNewLine('increase');
           break;
         }
         case token.content === '}': {
-          //
-          this.addNewLine('decrease');
-          //
+          const behind = this.lookBehind(true);
+          if (behind) {
+            this.addNewLine('decrease');
+          }
           this.commitOutputTransaction(() => {
             const content = this.resolveTokenContent(token.content);
             this.output += content;
@@ -483,6 +507,7 @@ export class Traverse {
           break;
         }
         case token.content === '[': {
+          const ahead = this.lookAhead(true);
           this.commitOutputTransaction(() => {
             this.output += this.resolveTokenContent(token.content);
             this.addTokenToCurrentLine();
@@ -491,7 +516,10 @@ export class Traverse {
           break;
         }
         case token.content === ']': {
-          this.addNewLine('decrease');
+          const behind = this.lookBehind(true);
+          if (behind) {
+            this.addNewLine('decrease');
+          }
           this.commitOutputTransaction(() => {
             this.output += this.resolveTokenContent(token.content);
             this.addTokenToCurrentLine();
@@ -519,21 +547,21 @@ export class Traverse {
           const nonWhiteSpaceTokenBehind = this.lookBehind(true);
           const nonWhiteSpaceTokenAhead = this.lookAhead(true);
 
-          const shouldAddlineBreak = tokenBehind?.type === 'linebreak' && nonWhiteSpaceTokenBehind?.content !== '{';
+          const shouldAddlineBreak = tokenBehind?.type === 'linebreak' && !startList.includes(nonWhiteSpaceTokenBehind?.content);
 
           if (shouldAddlineBreak) {
             this.addNewLine();
           }
 
           this.commitOutputTransaction(() => {
-            if (!shouldAddlineBreak && tokenBehind && nonWhiteSpaceTokenBehind?.content !== '{') {
+            if (!shouldAddlineBreak && tokenBehind && !startList.includes(nonWhiteSpaceTokenBehind?.content)) {
               this.output += ' ';
             }
             this.addTokenToCurrentLine();
             this.output += this.resolveTokenContent(token.content);
           });
 
-          if (nonWhiteSpaceTokenAhead && nonWhiteSpaceTokenAhead.content !== '}' && nonWhiteSpaceTokenAhead.type !== 'comment') {
+          if (nonWhiteSpaceTokenAhead && !endList.includes(nonWhiteSpaceTokenAhead.content) && nonWhiteSpaceTokenAhead.type !== 'comment') {
             this.addNewLine();
           }
           break;

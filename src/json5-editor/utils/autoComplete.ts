@@ -1,71 +1,98 @@
-export const fillWithIndent = (
-  textArea: HTMLTextAreaElement,
-  needle: string,
-  fill: string,
-  code: string,
-  setCode: React.Dispatch<React.SetStateAction<string>>,
-  event: KeyboardEvent,
-) => {
-  const startPos = textArea?.selectionStart || 0;
-  const endPos = textArea?.selectionEnd || 0;
-  const condition =
-    startPos === endPos && (code || '')[startPos - 1] === needle;
-  // 没有选中任何文本，且前一个字符是可以被配对时：
-  if (condition) {
-    event.preventDefault();
-    setCode(c => {
-      const prefix = c.slice(0, startPos);
-      const suffix = c.slice(startPos);
-      const currentLine = prefix.slice(prefix.lastIndexOf('\n') + 1);
-      const leadingWhiteSpace =
-        (currentLine.split('').findIndex(ele => ele !== ' ') || 0) + 2;
+export const getLinesByPos = (code: string, startPos: number) => {
+  const prefix = code.slice(0, startPos);
+  const currentLineStart = prefix.lastIndexOf('\n') + 1;
+  const previousLineStart = prefix.slice(0, currentLineStart - 1).lastIndexOf('\n') + 1;
+  const currentLine = prefix.slice(currentLineStart);
+  const previousLine = prefix.slice(previousLineStart, currentLineStart);
+  const foundIndex = previousLine.split('').findIndex((ele) => ele !== ' ');
+  const leadingWhiteSpace = foundIndex === -1 ? 0 : foundIndex;
 
-      // 下一帧时跳转指针位置
-      window.requestAnimationFrame(() => {
-        textArea?.setSelectionRange(
-          startPos + leadingWhiteSpace + 1,
-          startPos + leadingWhiteSpace + 1,
-        );
-      });
-
-      // 避免重复填充 matching char
-      const codeArray = code.split('');
-      const needFill =
-        codeArray.filter(ele => ele === needle).length !==
-        codeArray.filter(ele => ele === fill).length;
-
-      // 处于 pair 之间，按下回车
-      const needExtraSpace = (code || '')[startPos] === fill;
-
-      if (!needFill) {
-        return [
-          prefix,
-          `\n${Array(leadingWhiteSpace + 1).join(' ')}${
-            needExtraSpace ? `\n${Array(leadingWhiteSpace - 1).join(' ')}` : ''
-          }`,
-          suffix,
-        ].join('');
-      } else {
-        return [
-          prefix,
-          `\n${Array(leadingWhiteSpace + 1).join(' ')}\n${Array(
-            leadingWhiteSpace - 1,
-          ).join(' ')}${fill}${leadingWhiteSpace === 2 ? '' : ','}`,
-          suffix,
-        ].join('');
-      }
-    });
-  }
-  return condition;
+  return {
+    leadingWhiteSpace,
+    currentLine,
+    previousLine,
+  };
 };
 
-export const fillAfter = (textArea: HTMLTextAreaElement, needle: string) => {
-  const startPos = textArea?.selectionStart || 0;
-  const endPos = textArea?.selectionEnd || 0;
-  if (startPos === endPos) {
-    document.execCommand('insertText', false, needle);
-    window.requestAnimationFrame(() => {
-      textArea?.setSelectionRange(startPos + 1, startPos + 1);
-    });
+export const generateWhiteSpace = (whitespace: number) => {
+  return Array(Math.max(whitespace + 1, 1)).join(' ');
+};
+
+export const insertText = (text: string) => {
+  document.execCommand('insertText', false, text);
+};
+
+export const getTokensOfCurrentLine = (tokens: (Prism.Token | string)[], cursorIndex: number) => {
+  const tokenIndex = getCurrentTokenIndex(tokens, cursorIndex);
+  let currentIndex = tokenIndex;
+  const line: (Prism.Token | string)[] = [];
+  while (currentIndex >= 0) {
+    const current = tokens[currentIndex];
+    if (isToken(current) && current.type === 'linebreak') {
+      break;
+    } else {
+      line.unshift(current);
+    }
+    currentIndex--;
   }
+  return line;
+};
+
+export const getCurrentTokenIndex = (tokens: (Prism.Token | string)[], cursorIndex: number) => {
+  let remain = cursorIndex;
+  let foundIndex = -1;
+  for (let i = 0; i < tokens.length; i++) {
+    const currentToken = tokens[i];
+    if (remain - currentToken.length > 0) {
+      remain -= currentToken.length;
+    } else {
+      foundIndex = i;
+      break;
+    }
+  }
+  return foundIndex;
+};
+
+export const isToken = (tok: string | Prism.Token | undefined): tok is Prism.Token => {
+  return Boolean(tok && typeof tok !== 'string');
+};
+
+export const getTokenContent = (tok: Prism.TokenStream | undefined): string => {
+  if (Array.isArray(tok)) {
+    return tok
+      .map((t) => {
+        return getTokenContent(t);
+      })
+      .join('');
+  }
+  if (isToken(tok)) {
+    return getTokenContent(tok.content);
+  }
+  return tok || '';
+};
+
+export const tokenContentEquals = (tok: Prism.TokenStream | undefined, val: string): tok is string => {
+  if (!tok) {
+    return false;
+  }
+  if (tok === val) {
+    return true;
+  }
+  if (Array.isArray(tok)) {
+    return false;
+  }
+  if (typeof tok !== 'string') {
+    return tokenContentEquals(tok.content, val);
+  }
+  return false;
+};
+
+export const getLengthOfToken = (tok: Prism.TokenStream | undefined): number => {
+  // let len = 0
+  if (Array.isArray(tok)) {
+    return tok.reduce((acc, ele) => {
+      return acc + getLengthOfToken(ele);
+    }, 0);
+  }
+  return tok?.length || 0;
 };
