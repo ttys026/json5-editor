@@ -38,7 +38,7 @@ export const lex: Prism.Grammar = {
   },
   // match leading spaces for every lines besides the first line
   leading: {
-    pattern: /(\r?\n)+\s*/g,
+    pattern: /(\r?\n)+[ ]*/g,
     lookbehind: true,
     inside: {
       indent: {

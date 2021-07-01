@@ -333,8 +333,7 @@ export class Traverse {
     }
     const { mode = 'strict' } = param || {};
     const { lines } = this;
-    let objectDeepth = 0;
-    let arrayDeepth = 0;
+    let deepth = 0;
     let parentPunctuations: typeof lines[0] = [];
     outer: for (let i = 0; i < lines.length; i++) {
       const line = this.lines[i] || [];
@@ -344,7 +343,7 @@ export class Traverse {
         // const columnNo = token +
         condition: switch (true) {
           case this.resolveTokenContent(token.content) === '{': {
-            objectDeepth += 1;
+            deepth += 1;
             const previousPunctuation = parentPunctuations[parentPunctuations.length - 1];
             if (previousPunctuation?.content === '{' && this.isPropertyLine(line) && column === 2) {
               parentPunctuations.push(token);
@@ -356,8 +355,8 @@ export class Traverse {
             break;
           }
           case this.resolveTokenContent(token.content) === '}': {
-            objectDeepth -= 1;
-            if (objectDeepth === 0 && (i !== lines.length - 1 || column !== line.length - 1)) {
+            deepth -= 1;
+            if (deepth === 0 && (i !== lines.length - 1 || column !== line.length - 1)) {
               throw new ValidateError({ token });
             }
             const last = parentPunctuations.pop();
@@ -367,7 +366,7 @@ export class Traverse {
             break;
           }
           case this.resolveTokenContent(token.content) === '[': {
-            arrayDeepth += 1;
+            deepth += 1;
             const previousPunctuation = parentPunctuations[parentPunctuations.length - 1];
             if (previousPunctuation?.content === '{' && this.isPropertyLine(line) && column === 2) {
               parentPunctuations.push(token);
@@ -379,8 +378,8 @@ export class Traverse {
             break;
           }
           case this.resolveTokenContent(token.content) === ']': {
-            arrayDeepth -= 1;
-            if (arrayDeepth === 0 && (i !== lines.length - 1 || column !== line.length - 1)) {
+            deepth -= 1;
+            if (deepth === 0 && (i !== lines.length - 1 || column !== line.length - 1)) {
               throw new ValidateError({ token });
             }
             const last = parentPunctuations.pop();

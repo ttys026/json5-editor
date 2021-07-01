@@ -231,7 +231,6 @@ export default memo(
             }
 
             const fullListLength = getLengthOfToken(fullList);
-            // const type = fullList.some(tok => tokenContentEquals(tok, '}') || tokenContentEquals(tok, ']')) ? 'whole' : 'segment';
             const formatted = new Traverse(fullList, { type: 'segment' }).format();
 
             textArea?.setSelectionRange(startPos - fullListLength - 1, startPos);
