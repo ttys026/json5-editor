@@ -93,6 +93,7 @@ export default memo(
       };
       // format on blur
       const blurHandler = (ev: FocusEvent) => {
+        clearPairs(preElementRef.current!);
         const prevTokens = tokensRef.current;
         const traverse = new Traverse(prevTokens);
         traverse.format();
@@ -192,7 +193,7 @@ export default memo(
             const lastToken = previousList.pop();
             if (tokenContentEquals(lastToken, start)) {
               requestAnimationFrame(() => {
-                const { leadingWhiteSpace, previousLine, currentLine } = getLinesByPos(codeRef.current, startPos);
+                const { leadingWhiteSpace } = getLinesByPos(codeRef.current, startPos);
                 const codeArray = codeRef.current.split('');
                 // start count !== end count, then append
                 const needFill = codeArray.filter((ele) => ele === start).length !== codeArray.filter((ele) => ele === end).length;
@@ -290,7 +291,10 @@ export default memo(
     };
 
     return (
-      <div className={classNames('json5-editor-wrapper', hasFormatError ? 'json5-editor-wrapper-has-error' : '', props.className, props.disabled ? 'json5-editor-wrapper-disabled' : '')}>
+      <div
+        style={{ maxHeight: 600 }}
+        className={classNames('json5-editor-wrapper', hasFormatError ? 'json5-editor-wrapper-has-error' : '', props.className, props.disabled ? 'json5-editor-wrapper-disabled' : '')}
+      >
         <Editor
           ref={(r: any) => {
             textAreaRef.current = r?._input;
@@ -316,6 +320,8 @@ export default memo(
           }}
           padding={8}
           style={{
+            flex: 1,
+            height: '100%',
             fontFamily: 'SFMono-Regular,Consolas,Liberation Mono,Menlo,monospace',
             fontSize: 14,
             lineHeight: 1.5,
