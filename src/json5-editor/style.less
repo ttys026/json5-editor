@@ -15,6 +15,36 @@
     min-height: 200px;
   }
 
+  // line numbers
+  .line-numbers-rows {
+    box-sizing: border-box;
+    font-size: 14px;
+    letter-spacing: -1px;
+    border-right: 1px solid #e8e8e8;
+    padding: 8px 0;
+    user-select: none;
+    font-family: SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace;
+    height: fit-content;
+    background-color: rgba(0, 0, 0, 0.03);
+    min-height: 200px;
+    color: #999;
+  }
+
+  .line-numbers-rows > span {
+    padding: 0 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    counter-increment: linenumber;
+    cursor: pointer;
+  }
+
+  .line-numbers-rows > span:before {
+    content: counter(linenumber);
+    display: block;
+    text-align: right;
+  }
+
   border: 1px solid #e8e8e8;
   &.@{namespace}-has-error {
     border: 1px solid rgba(255, 77, 79, 0.5);
@@ -45,6 +75,9 @@
     box-shadow: 0 0 0 2px rgb(24 144 255 / 20%);
   }
 
+  .token.error {
+    background-color: rgba(0, 0, 0, 0.1);
+  }
   .token.punctuation {
     color: #595959;
   }

@@ -1,3 +1,5 @@
+import { ValidateError } from './format';
+
 export const getLinesByPos = (code: string, startPos: number) => {
   const prefix = code.slice(0, startPos);
   const currentLineStart = prefix.lastIndexOf('\n') + 1;
@@ -53,7 +55,7 @@ export const getCurrentTokenIndex = (tokens: (Prism.Token | string)[], cursorInd
   return foundIndex;
 };
 
-export const isToken = (tok: string | Prism.Token | undefined): tok is Prism.Token => {
+export const isToken = (tok: string | Prism.Token | undefined | Prism.Token[]): tok is Prism.Token => {
   return Boolean(tok && typeof tok !== 'string');
 };
 
@@ -95,4 +97,33 @@ export const getLengthOfToken = (tok: Prism.TokenStream | undefined): number => 
     }, 0);
   }
   return tok?.length || 0;
+};
+
+export const markErrorToken = (tok: (Prism.Token | string)[], formatError: ValidateError | null) => {
+  if (!formatError || !formatError.lineNo) {
+    return;
+  }
+  if (!Array.isArray(tok) || tok.length === 0) {
+    return;
+  }
+  let lineNo = 0;
+  let column = 0;
+
+  for (let i = 0; i < tok?.length; i++) {
+    const current = tok[i];
+    if (current) {
+      if (tokenContentEquals(current, '\n')) {
+        lineNo += 1;
+        column = 0;
+      } else {
+        if (lineNo === Number(formatError.lineNo) - 1) {
+          column += getLengthOfToken(current);
+          if (column >= Number(formatError.columnNo) && isToken(current)) {
+            (current as Prism.Environment).hasError = true;
+            break;
+          }
+        }
+      }
+    }
+  }
 };

@@ -1,4 +1,5 @@
 import { endList, startList } from '../constant';
+import { isToken } from './autoComplete';
 
 interface WrappedToken extends Prism.Token {
   tag: string;
@@ -173,6 +174,10 @@ function stringify(token: WrappedTokenStream, language: string): string {
     env.classes.push('brace', 'brace-end');
   }
 
+  if (env.hasError) {
+    env.classes.push('error');
+  }
+
   let attributes = '';
   for (const name in env.attributes) {
     attributes += ' ' + name + '="' + (env.attributes[name] || '').replace(/"/g, '&quot;') + '"';
@@ -181,9 +186,28 @@ function stringify(token: WrappedTokenStream, language: string): string {
   return '<' + env.tag + ' class="' + env.classes.join(' ') + '"' + attributes + '>' + env.content + '</' + env.tag + '>';
 }
 
+/**
+ * encode tokens and keep attributes
+ * @param tokens Prism.TokenStream
+ * @returns string
+ */
+const encode = (tokens: string | WrappedToken | WrappedToken[]): WrappedToken | WrappedToken[] | string | string[] => {
+  if (isToken(tokens)) {
+    return tokens;
+  } else if (Array.isArray(tokens)) {
+    return tokens.map(encode) as WrappedToken[];
+  } else {
+    return tokens
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/\u00a0/g, ' ');
+  }
+};
+
 export const tokenStreamToHtml = (token: Prism.Token | Prism.TokenStream | string, language: string): string => {
+  const encoded = encode(token as WrappedToken);
   const cache: string[] = [];
-  const tokens = preWrap(Array.isArray(token) ? token : [token], language) as WrappedToken[];
+  const tokens = preWrap(Array.isArray(encoded) ? encoded : [encoded], language) as WrappedToken[];
 
   for (let i = tokens.length - 1; i >= 0; i--) {
     const current = tokens[i];

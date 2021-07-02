@@ -9,7 +9,7 @@ group:
 import React from 'react';
 import { Editor } from 'json5-editor';
 
-export default () => <Editor initialValue={`{\n  \n}`} />;
+export default () => <Editor showLineNumber initialValue={`{\n  \n}`} />;
 ```
 
 ```tsx
@@ -56,13 +56,9 @@ export default () => {
       <Form.Item name="code">
         <Editor disabled />
       </Form.Item>
-      <button onClick={() => setKey(k => k + 1)}>rerender</button>
-      <button onClick={() => console.log(form.getFieldsValue())}>
-        getFieldsValue
-      </button>
-      <button onClick={() => form.setFieldsValue({ code: '123' })}>
-        setFieldsValue
-      </button>
+      <button onClick={() => setKey((k) => k + 1)}>rerender</button>
+      <button onClick={() => console.log(form.getFieldsValue())}>getFieldsValue</button>
+      <button onClick={() => form.setFieldsValue({ code: '123' })}>setFieldsValue</button>
     </Form>
   );
 };

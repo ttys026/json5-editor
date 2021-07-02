@@ -7,7 +7,7 @@ export interface Config {
   type: 'whole' | 'segment';
 }
 
-class ValidateError extends Error {
+export class ValidateError extends Error {
   public lineNo: string;
   public columnNo: string;
   public token: Token;
@@ -356,7 +356,7 @@ export class Traverse {
           }
           case this.resolveTokenContent(token.content) === '}': {
             deepth -= 1;
-            if (deepth === 0 && (i !== lines.length - 1 || column !== line.length - 1)) {
+            if (deepth < 0 && (i !== lines.length - 1 || column !== line.length - 1)) {
               throw new ValidateError({ token });
             }
             const last = parentPunctuations.pop();
@@ -379,7 +379,7 @@ export class Traverse {
           }
           case this.resolveTokenContent(token.content) === ']': {
             deepth -= 1;
-            if (deepth === 0 && (i !== lines.length - 1 || column !== line.length - 1)) {
+            if (deepth < 0 && (i !== lines.length - 1 || column !== line.length - 1)) {
               throw new ValidateError({ token });
             }
             const last = parentPunctuations.pop();

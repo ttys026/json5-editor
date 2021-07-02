@@ -5,10 +5,22 @@ import classNames from 'classnames';
 // @ts-expect-error
 import Editor from './Editor';
 import { endList, startList } from './constant';
-import { getLinesByPos, insertText, generateWhiteSpace, getTokensOfCurrentLine, getCurrentTokenIndex, isToken, getTokenContent, tokenContentEquals, getLengthOfToken } from './utils/autoComplete';
+import {
+  getLinesByPos,
+  insertText,
+  generateWhiteSpace,
+  getTokensOfCurrentLine,
+  getCurrentTokenIndex,
+  isToken,
+  getTokenContent,
+  tokenContentEquals,
+  getLengthOfToken,
+  markErrorToken,
+} from './utils/autoComplete';
 import { activePairs, clearPairs } from './utils/match';
 import { lex, afterTokenizeHook, tokenStreamToHtml } from './utils/prism';
-import { Traverse } from './utils/format';
+import { addLineNumber } from './utils/lineNumber';
+import { Traverse, ValidateError } from './utils/format';
 import useControllableValue from './hooks/useControllableValue';
 import './style.less';
 export interface Props {
@@ -20,6 +32,7 @@ export interface Props {
   className?: string;
   disabled?: boolean;
   readOnly?: boolean;
+  showLineNumber?: boolean;
 }
 
 export interface RefProps {
@@ -29,6 +42,8 @@ export interface RefProps {
   onChange: React.Dispatch<React.SetStateAction<string>>;
   format: () => void;
 }
+
+export type RootEnv = Prism.Environment & { tokens: (Prism.Token | string)[]; code: string; element: HTMLDivElement };
 
 export const formatJSON5 = (code: string) => {
   const tokens = tokenize(code, lex);
@@ -41,11 +56,13 @@ export default memo(
   forwardRef((props: Props, ref: Ref<RefProps>) => {
     const textAreaRef = useRef<HTMLTextAreaElement | null>(null);
     const preElementRef = useRef<HTMLPreElement | null>(null);
-    const [hasFormatError, setHasFormatError] = useState(false);
-    const [code, setCode] = useControllableValue<string>(props);
+    const [formatError, setFormatError] = useState<ValidateError | null>(null);
+    const [code = '', setCode] = useControllableValue<string>(props);
     const shouldForbiddenEdit = props.disabled || props.readOnly || ('value' in props && !('onChange' in props));
     const tokensRef = useRef<(Prism.Token | string)[]>([]);
     const previousKeyboardEvent = useRef<KeyboardEvent | null>(null);
+    const container = useRef<HTMLDivElement>(null);
+    const isFirstMount = useRef(true);
 
     const codeRef = useRef(code);
     codeRef.current = code;
@@ -72,23 +89,22 @@ export default memo(
       textAreaRef.current?.dispatchEvent(new Event('blur'));
     }, []);
 
-    useImperativeHandle(ref, () => ({
-      editorRef: textAreaRef.current,
-      preRef: preElementRef.current,
-      value: code,
-      onChange: setCode,
-      format,
-    }));
+    useImperativeHandle(
+      ref,
+      () => ({
+        editorRef: textAreaRef.current,
+        preRef: preElementRef.current,
+        value: codeRef.current,
+        onChange: setCode,
+        format,
+      }),
+      [],
+    );
 
     useEffect(() => {
       const textArea = textAreaRef.current!;
       // special char key down
       const keyDownHandler = (ev: KeyboardEvent) => {
-        const startPos = textArea?.selectionStart || 0;
-        const endPos = textArea?.selectionEnd || 0;
-        if (startPos !== endPos) {
-          return;
-        }
         previousKeyboardEvent.current = ev;
       };
       // format on blur
@@ -101,9 +117,9 @@ export default memo(
         setCode(str);
         try {
           traverse.validate({ mode: 'loose' });
-          setHasFormatError(false);
+          setFormatError(null);
         } catch (e) {
-          setHasFormatError(true);
+          setFormatError(e);
           if (process.env.NODE_ENV === 'development') {
             console.log(e);
           }
@@ -150,7 +166,7 @@ export default memo(
       };
 
       const focusHandler = () => {
-        setHasFormatError(false);
+        setFormatError(null);
       };
 
       textArea?.addEventListener('keydown', keyDownHandler);
@@ -168,7 +184,7 @@ export default memo(
       };
     }, []);
 
-    const autoFill = (env: Prism.Environment & { tokens: (Prism.Token | string)[] }) => {
+    const autoFill = (env: RootEnv) => {
       const textArea = textAreaRef.current!;
       const startPos = textArea?.selectionStart || 0;
       const endPos = textArea?.selectionEnd || 0;
@@ -228,9 +244,6 @@ export default memo(
               return;
             }
 
-            if (tokenList.length === 2 && tokenContentEquals(tokenList[0], '{') && tokenContentEquals(tokenList[1], '}')) {
-            }
-
             const fullListLength = getLengthOfToken(fullList);
             const formatted = new Traverse(fullList, { type: 'segment' }).format();
 
@@ -248,6 +261,7 @@ export default memo(
             if (line.length === 2 && isToken(line[0]) && line[0].type === 'property') {
               insertText(' ');
             }
+            return;
           });
           break;
         }
@@ -265,9 +279,6 @@ export default memo(
           });
           break;
         }
-        case !Date.now(): {
-          break;
-        }
         case ev?.key === '|' && isToken(current) && tokenContentEquals(current, '|'): {
           requestAnimationFrame(() => {
             textArea?.setSelectionRange(startPos - 1, startPos);
@@ -275,26 +286,50 @@ export default memo(
           });
           break;
         }
-        case true: {
-          break;
-        }
-        case true: {
-          break;
-        }
-        case true: {
-          break;
-        }
         default: {
           // do nothing, your code is perfect and has nothing to format
         }
       }
+
+      if (props.showLineNumber) {
+        setTimeout(() => {
+          addLineNumber({
+            ...env,
+            code: codeRef.current!,
+            tokens: tokensRef.current!,
+          });
+        }, 32);
+      }
+    };
+
+    const highlight = (code: string) => {
+      const env: RootEnv = {
+        code,
+        grammar: lex,
+        language: 'json5',
+        tokens: [],
+        element: container.current!,
+        error: formatError,
+      };
+      env.tokens = tokenize(code, lex);
+      afterTokenizeHook(env);
+      markErrorToken(env.tokens, formatError);
+      const htmlString = tokenStreamToHtml(env.tokens, env.language!);
+      autoFill(env);
+      if (props.showLineNumber) {
+        addLineNumber(env);
+      }
+      tokensRef.current = env.tokens;
+      return htmlString;
     };
 
     return (
       <div
+        ref={container}
         style={{ maxHeight: 600 }}
-        className={classNames('json5-editor-wrapper', hasFormatError ? 'json5-editor-wrapper-has-error' : '', props.className, props.disabled ? 'json5-editor-wrapper-disabled' : '')}
+        className={classNames('json5-editor-wrapper', Boolean(formatError) ? 'json5-editor-wrapper-has-error' : '', props.className, props.disabled ? 'json5-editor-wrapper-disabled' : '')}
       >
+        <div className="line-numbers-rows" />
         <Editor
           ref={(r: any) => {
             textAreaRef.current = r?._input;
@@ -305,18 +340,11 @@ export default memo(
           placeholder={props.placeholder}
           onValueChange={setCode}
           highlight={(code: string) => {
-            const env: Prism.Environment & { tokens: (Prism.Token | string)[] } = {
-              code,
-              grammar: lex,
-              language: 'json5',
-              tokens: [],
-            };
-            env.tokens = tokenize(code, lex);
-            afterTokenizeHook(env);
-            const htmlString = tokenStreamToHtml(util.encode(env.tokens), env.language!);
-            autoFill(env);
-            tokensRef.current = env.tokens;
-            return htmlString;
+            if (isFirstMount.current) {
+              isFirstMount.current = false;
+              requestAnimationFrame(() => highlight(code));
+            }
+            return highlight(code);
           }}
           padding={8}
           style={{
