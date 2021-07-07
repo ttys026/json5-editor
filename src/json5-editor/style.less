@@ -2,7 +2,9 @@
 
 .@{namespace} {
   min-height: 200px;
+  height: 100%;
   cursor: text;
+  display: flex;
 
   div,
   textarea {
@@ -11,6 +13,68 @@
   textarea,
   pre {
     min-height: 200px;
+  }
+
+  // line numbers
+  .line-numbers-rows {
+    box-sizing: border-box;
+    font-size: 14px;
+    letter-spacing: -1px;
+    border-right: 1px solid #e8e8e8;
+    padding: 8px 0;
+    user-select: none;
+    font-family: SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace;
+    height: fit-content;
+    background-color: rgba(0, 0, 0, 0.03);
+    min-height: 200px;
+    color: #999;
+    min-width: 38px;
+
+    & > .errorLine {
+      background: rgba(255, 77, 79, 0.9);
+      color: #ffffff;
+
+      & > .errorMessage {
+        display: none;
+      }
+
+      &:hover > .errorMessage {
+        display: inline-block;
+        width: 0;
+        max-width: 0;
+        margin: 0;
+        overflow: visible;
+        transform: translate(8px, 1px);
+        z-index: 1;
+
+        & > span {
+          z-index: 1;
+          padding: 4px 8px;
+          background: #57606f;
+          word-break: break-all;
+          white-space: pre;
+          position: relative;
+          overflow: visible;
+        }
+      }
+    }
+
+    & > span {
+      padding: 0 8px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      cursor: pointer;
+      & > code {
+        position: relative;
+        top: 2px;
+      }
+      & > span {
+        position: relative;
+        top: 1px;
+        margin-left: 6px;
+      }
+    }
   }
 
   border: 1px solid #e8e8e8;
@@ -27,7 +91,6 @@
     }
   }
 
-  max-height: 600px;
   overflow: auto;
   transition: all 0.3s;
 
@@ -44,6 +107,9 @@
     box-shadow: 0 0 0 2px rgb(24 144 255 / 20%);
   }
 
+  .token.error {
+    background-color: rgba(0, 0, 0, 0.1);
+  }
   .token.punctuation {
     color: #595959;
   }

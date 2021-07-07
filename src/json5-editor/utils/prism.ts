@@ -1,169 +1,229 @@
-/* eslint-disable */
-import Prism, { hooks, Environment, Token } from 'prismjs';
-
-// 参考 1：https://prismjs.com/test.html#language=json5 // inspect element to check deps and its order
-// 参考 2：https://prismjs.com/extending.html#resolving-dependencies
-import 'prismjs/components/prism-markup.min.js';
-import 'prismjs/components/prism-json.min.js';
-import 'prismjs/components/prism-json5.min.js';
 import { endList, startList } from '../constant';
+import { isToken } from './autoComplete';
 
-const getInnerContent = (str: string) => {
-  if (str.startsWith('"') || str.startsWith("'")) {
-    return str.slice(1, str.length - 1);
-  }
-  return str;
-};
-
-interface EditorState {
-  cache: string[];
-  latestTokens: Token[];
+interface WrappedToken extends Prism.Token {
+  tag: string;
+  classes: string[];
+  attributes: {};
+  language: string;
+  content: WrappedTokenStream;
 }
 
-const getLanguageAsSymbol = (
-  env: hooks.RequiredEnvironment<'language', Environment>,
-) => {
-  return (env.language as unknown) as symbol;
+type WrappedTokenStream = WrappedToken | WrappedToken[] | string | string[];
+
+export const lex: Prism.Grammar = {
+  collapse: [
+    { pattern: /\{\┉\}\u200c*/, alias: 'object' },
+    { pattern: /\[\┉\]\u200c*/, alias: 'array' },
+  ],
+  property: [
+    { pattern: /("|')(?:\\(?:\r\n?|\n|.)|(?!\1)[^\\\r\n])*\1\*?(?=\s*:)/g, greedy: true },
+    { pattern: /(?!\s)[_$a-zA-Z\xA0-\uFFFF\*](?:(?!\s)[$\w\xA0-\uFFFF\*\?])*(?=\s*:)/, alias: 'unquoted' },
+  ],
+  string: {
+    pattern: /("|')(?:\\(?:\r\n?|\n|.)|(?!\1)[^\\\r\n])*\1/g,
+    greedy: true,
+  },
+  comment: {
+    pattern: /\/\/.*|\/\*[\s\S]*?(?:\*\/|$)/g,
+    greedy: true,
+  },
+  number: /[+-]?\b(?:NaN|Infinity|0x[a-fA-F\d]+)\b|[+-]?(?:\b\d+(?:\.\d*)?|\B\.\d+)(?:[eE][+-]?\d+\b)?/,
+  punctuation: /[{}[\]\|\(\),]/,
+  operator: /:/,
+  boolean: /\b(?:true|false)\b/,
+  null: {
+    alias: 'keyword',
+    pattern: /\bnull\b/,
+  },
+  // only match leading spaces in the first line
+  indent: {
+    pattern: /^[ ]{2}/g,
+    greedy: true,
+  },
+  // match leading spaces for every lines besides the first line
+  leading: {
+    pattern: /(\r?\n)+[ ]*/g,
+    lookbehind: true,
+    inside: {
+      indent: {
+        pattern: /[ ]{2}/,
+      },
+    },
+  },
+  linebreak: /\r?\n/,
+  unknown: /(?!\s).+(?=\s*)/,
 };
 
-const cacheTokens = (uid: symbol, tokens: Token[]) => {
-  setTimeout(() => {
-    // 如果已经被卸载了，则不重新缓存 tokens
-    if (editorCacheMap.has(uid)) {
-      editorCacheMap.set(uid, {
-        cache: editorCacheMap.get(uid)?.cache || [],
-        latestTokens: tokens,
-      });
+/**
+ * Same as Prism after-tokenize hook, but not mounted globally
+ * @param this token caches
+ * @param env Prism.Environment
+ */
+export const afterTokenizeHook = (env: Prism.Environment) => {
+  let lastProperty: string | number | symbol = 'root';
+  // 当遇到 array 时，插入一个 placeholder symbol，用于在 arrayPrefix 数组中找到真实的 index 后替换
+  let prefix: Array<string | number | symbol> = [];
+  let arrayPrefix: number[] = [];
+  let symbol = Symbol('placeholder');
+  const getInnerContent = (str: string) => {
+    if (str.startsWith('"') || str.startsWith("'")) {
+      return str.slice(1, str.length - 1);
     }
-  });
-};
+    return str;
+  };
 
-const resetTokens = (uid: symbol) => {
-  if (editorCacheMap.has(uid)) {
-    editorCacheMap.set(uid, {
-      cache: [],
-      latestTokens: [],
-    });
-  }
-};
-
-export const getTokens = (uid: symbol) => {
-  return editorCacheMap.get(uid)?.latestTokens;
-};
-
-export const getTokenAtIndex = (uid: symbol, index: number) => {
-  const tokens = getTokens(uid) || [];
-  let remain = index;
-  for (let token of tokens) {
-    remain -= token.length;
-    if (remain < 0) {
-      return token;
+  for (let i = 0; i < (env.tokens?.length || 0); i++) {
+    if (env.tokens[i].content === '{') {
+      prefix.push(lastProperty);
+      lastProperty = '';
+      // prefix.push(lastProperty);
+    }
+    if (env.tokens[i].content === '[') {
+      prefix.push(lastProperty);
+      arrayPrefix.push(0);
+      prefix.push(symbol);
+      lastProperty = '';
+    }
+    if (env.tokens[i].content === '}') {
+      prefix.pop();
+      lastProperty = prefix[prefix.length - 1];
+      if (arrayPrefix.length && typeof lastProperty === 'symbol') {
+        arrayPrefix[arrayPrefix.length - 1]++;
+      }
+      lastProperty = '';
+    }
+    if (env.tokens[i].content === ']') {
+      prefix.pop();
+      prefix.pop();
+      arrayPrefix.pop();
+      lastProperty = prefix[prefix.length - 1];
+      if (arrayPrefix.length && typeof lastProperty === 'symbol') {
+        arrayPrefix[arrayPrefix.length - 1]++;
+      }
+      lastProperty = '';
+    }
+    if (env.tokens[i].type === 'property') {
+      lastProperty = getInnerContent(env.tokens[i].content);
+      let arrayIndex = 0;
+      env.tokens[i].alias = `${env.tokens[i].alias || ''} ${[...prefix, lastProperty]
+        .filter((ele) => ele !== '')
+        .map((ele) => (typeof ele === 'symbol' ? arrayPrefix[arrayIndex++] : ele))
+        .join('.')}`.trim();
     }
   }
-  return undefined;
 };
 
-const editorCacheMap = new Map<symbol, EditorState>();
+const getObjectPath = (env: WrappedToken) => {
+  const extraClassList = (env.classes[2] || '').split(' ');
+  return extraClassList[extraClassList.length - 1];
+};
 
-export function registerPlugin(uid: symbol) {
-  editorCacheMap.set(uid, {
-    cache: [],
-    latestTokens: [],
-  });
-
-  // before-insert is a self registered hook that can determine first time registration
-  if (!((Prism.hooks.all || {})['before-insert'] || []).length) {
-    Prism.languages.json5 = Prism.languages.extend('json5', {
-      // TODO: should skip non-leading spaces
-      indent: /[ ]{2}/,
-      punctuation: /[{}[\],\|\(\)]/,
-      unknown: /(?!\s).+(?=\s*)/,
-    });
-
-    Prism.hooks.add('after-tokenize', function(env) {
-      resetTokens(getLanguageAsSymbol(env));
-      let lastProperty: string | number | symbol = 'root';
-      // 当遇到 array 时，插入一个 placeholder symbol，用于在 arrayPrefix 数组中找到真实的 index 后替换
-      let prefix: Array<string | number | symbol> = [];
-      let arrayPrefix: number[] = [];
-      let symbol = Symbol('placeholder');
-
-      cacheTokens(getLanguageAsSymbol(env), env.tokens);
-      for (let i = 0; i < (env.tokens?.length || 0); i++) {
-        if (env.tokens[i].content === '{') {
-          prefix.push(lastProperty);
-          lastProperty = '';
-          // prefix.push(lastProperty);
-        }
-        if (env.tokens[i].content === '[') {
-          prefix.push(lastProperty);
-          arrayPrefix.push(0);
-          prefix.push(symbol);
-          lastProperty = '';
-        }
-        if (env.tokens[i].content === '}') {
-          prefix.pop();
-          lastProperty = prefix[prefix.length - 1];
-          if (arrayPrefix.length && typeof lastProperty === 'symbol') {
-            arrayPrefix[arrayPrefix.length - 1]++;
-          }
-          lastProperty = '';
-        }
-        if (env.tokens[i].content === ']') {
-          prefix.pop();
-          prefix.pop();
-          arrayPrefix.pop();
-          lastProperty = prefix[prefix.length - 1];
-          if (arrayPrefix.length && typeof lastProperty === 'symbol') {
-            arrayPrefix[arrayPrefix.length - 1]++;
-          }
-          lastProperty = '';
-        }
-        if (env.tokens[i].type === 'property') {
-          lastProperty = getInnerContent(env.tokens[i].content);
-          let arrayIndex = 0;
-          env.tokens[i].alias = `${env.tokens[i].alias || ''} ${[
-            ...prefix,
-            lastProperty,
-          ]
-            .filter(ele => ele !== '')
-            .map(ele =>
-              typeof ele === 'symbol' ? arrayPrefix[arrayIndex++] : ele,
-            )
-            .join('.')}`.trim();
-        }
-      }
-    });
-
-    Prism.hooks.add('before-insert', env => {
-      resetTokens(getLanguageAsSymbol(env));
-    });
-
-    // exist property
-    Prism.hooks.add('wrap', env => {
-      if (editorCacheMap.get(getLanguageAsSymbol(env))) {
-        let { cache = [] } = editorCacheMap.get(getLanguageAsSymbol(env)) || {};
-        if (env.type === 'property') {
-          const extraClassList = (env.classes[2] || '').split(' ');
-          const objectPath = extraClassList[extraClassList.length - 1];
-          if (cache.includes(objectPath)) {
-            env.classes.push('exist-property');
-          } else {
-            cache.push(objectPath);
-          }
-        }
-      }
-
-      if (startList.includes(env.content)) {
-        env.classes.push('brace', 'brace-start');
-      }
-      if (endList.includes(env.content)) {
-        env.classes.push('brace', 'brace-end');
-      }
-    });
+/**
+ * pre-wrap tokens, add classNames and attributes to token
+ * @param token
+ * @param language
+ * @returns
+ */
+function preWrap(token: Prism.Token | Prism.TokenStream | string, language: string): WrappedTokenStream {
+  if (typeof token == 'string') {
+    return token;
   }
+  if (Array.isArray(token)) {
+    return token.map((tok) => {
+      return preWrap(tok, language);
+    }) as WrappedTokenStream;
+  }
+
+  const env: WrappedToken = {
+    ...token,
+    tag: 'span',
+    classes: ['token', token.type],
+    attributes: {},
+    language: language,
+    content: preWrap(token.content, language),
+  };
+  const aliases = token.alias;
+  if (aliases) {
+    if (Array.isArray(aliases)) {
+      Array.prototype.push.apply(env.classes, aliases);
+    } else {
+      env.classes.push(aliases);
+    }
+  }
+  return env;
 }
 
-export function unRegisterPlugin(uid: symbol) {
-  editorCacheMap.delete(uid);
+function stringify(token: WrappedTokenStream, language: string): string {
+  if (typeof token == 'string') {
+    return token;
+  }
+  if (Array.isArray(token)) {
+    let ret = '';
+    token.forEach((tok: WrappedTokenStream) => {
+      ret += stringify(tok, language);
+    });
+    return ret;
+  }
+
+  let env: Prism.hooks.RequiredEnvironment<'classes' | 'content', Prism.Environment> = {
+    ...token,
+    content: stringify(token.content, language),
+  };
+
+  if (startList.includes(env.content)) {
+    env.classes.push('brace', 'brace-start');
+  }
+  if (endList.includes(env.content)) {
+    env.classes.push('brace', 'brace-end');
+  }
+
+  if (env.hasError) {
+    env.classes.push('error');
+  }
+
+  let attributes = '';
+  for (const name in env.attributes) {
+    attributes += ' ' + name + '="' + (env.attributes[name] || '').replace(/"/g, '&quot;') + '"';
+  }
+
+  return '<' + env.tag + ' class="' + env.classes.join(' ') + '"' + attributes + '>' + env.content + '</' + env.tag + '>';
 }
+
+/**
+ * encode tokens and keep attributes
+ * @param tokens Prism.TokenStream
+ * @returns string
+ */
+const encode = (tokens: string | WrappedToken | WrappedToken[]): WrappedToken | WrappedToken[] | string | string[] => {
+  if (isToken(tokens)) {
+    return tokens;
+  } else if (Array.isArray(tokens)) {
+    return tokens.map(encode) as WrappedToken[];
+  } else {
+    return tokens
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/\u00a0/g, ' ');
+  }
+};
+
+export const tokenStreamToHtml = (token: Prism.Token | Prism.TokenStream | string, language: string): string => {
+  const encoded = encode(token as WrappedToken);
+  const cache: string[] = [];
+  const tokens = preWrap(Array.isArray(encoded) ? encoded : [encoded], language) as WrappedToken[];
+
+  for (let i = tokens.length - 1; i >= 0; i--) {
+    const current = tokens[i];
+    if (typeof current !== 'string' && current.type === 'property') {
+      const objectPath = getObjectPath(current);
+      if (cache.includes(objectPath)) {
+        current.classes.push('exist-property');
+      } else {
+        cache.push(objectPath);
+      }
+    }
+  }
+
+  return stringify(tokens, language);
+};
