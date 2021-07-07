@@ -100,14 +100,17 @@ export const getLengthOfToken = (tok: Prism.TokenStream | undefined): number => 
 };
 
 export const markErrorToken = (tok: (Prism.Token | string)[], formatError: ValidateError | null) => {
-  if (!formatError || !formatError.lineNo) {
-    return;
-  }
+  // if (!formatError || !formatError.lineNo) {
+  //   return;
+  // }
+  const hasError = formatError && formatError.lineNo;
   if (!Array.isArray(tok) || tok.length === 0) {
-    return;
+    return Array.isArray(tok) ? [tok] : [[tok]];
   }
   let lineNo = 0;
   let column = 0;
+  let errorFound = false;
+  const lines: Prism.Token[][] = [];
 
   for (let i = 0; i < tok?.length; i++) {
     const current = tok[i];
@@ -116,14 +119,18 @@ export const markErrorToken = (tok: (Prism.Token | string)[], formatError: Valid
         lineNo += 1;
         column = 0;
       } else {
-        if (lineNo === Number(formatError.lineNo) - 1) {
+        lines[lineNo] = [...(lines[lineNo] || []), current];
+        if (hasError && lineNo === Number(formatError?.lineNo) - 1) {
           column += getLengthOfToken(current);
-          if (column >= Number(formatError.columnNo) && isToken(current)) {
+          if (!errorFound && column >= Number(formatError?.columnNo) && isToken(current)) {
             (current as Prism.Environment).hasError = true;
-            break;
+            errorFound = true;
+            // break;
           }
         }
       }
     }
   }
+
+  return lines;
 };

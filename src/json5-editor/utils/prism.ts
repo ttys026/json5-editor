@@ -12,6 +12,10 @@ interface WrappedToken extends Prism.Token {
 type WrappedTokenStream = WrappedToken | WrappedToken[] | string | string[];
 
 export const lex: Prism.Grammar = {
+  collapse: [
+    { pattern: /\{\┉\}\u200c*/, alias: 'object' },
+    { pattern: /\[\┉\]\u200c*/, alias: 'array' },
+  ],
   property: [
     { pattern: /("|')(?:\\(?:\r\n?|\n|.)|(?!\1)[^\\\r\n])*\1\*?(?=\s*:)/g, greedy: true },
     { pattern: /(?!\s)[_$a-zA-Z\xA0-\uFFFF\*](?:(?!\s)[$\w\xA0-\uFFFF\*\?])*(?=\s*:)/, alias: 'unquoted' },

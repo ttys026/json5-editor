@@ -478,7 +478,7 @@ var styles = {
     textRendering: 'inherit',
     textTransform: 'inherit',
     whiteSpace: 'pre-wrap',
-    wordBreak: 'keep-all',
+    wordBreak: 'break-all',
     overflowWrap: 'break-word',
   },
 };

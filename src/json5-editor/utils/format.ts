@@ -37,7 +37,7 @@ export class Traverse {
   private currentIndex = 0;
   private output = '';
   private indentSize = 2;
-  private valueTypes = ['string', 'number', 'boolean', 'null', 'unknown'];
+  private valueTypes = ['string', 'number', 'boolean', 'null', 'unknown', 'collapse'];
   private config: Config = {
     type: 'whole',
   };
@@ -289,7 +289,7 @@ export class Traverse {
         this.output += ',';
       }
       // add new line when start a new property/item in object/array,
-      if (startList.includes(ahead.content) || ['number', 'boolean', 'string', 'unknown'].includes(ahead.type)) {
+      if (startList.includes(ahead.content) || this.valueTypes.includes(ahead.type)) {
         this.addNewLine();
       }
     }

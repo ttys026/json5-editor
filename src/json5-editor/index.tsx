@@ -1,5 +1,5 @@
 import React, { forwardRef, memo, Ref, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { tokenize, util } from 'prismjs/components/prism-core';
+import { tokenize } from 'prismjs/components/prism-core';
 import classNames from 'classnames';
 // TODO: need fork react-simple-code-editor's code to disable auto complete
 // @ts-expect-error
@@ -18,11 +18,13 @@ import {
   markErrorToken,
 } from './utils/autoComplete';
 import { activePairs, clearPairs } from './utils/match';
+import copy from 'copy-to-clipboard';
 import { lex, afterTokenizeHook, tokenStreamToHtml } from './utils/prism';
-import { addLineNumber } from './utils/lineNumber';
+import { addLineNumber, getCollapsedContent } from './utils/lineNumber';
 import { Traverse, ValidateError } from './utils/format';
 import useControllableValue from './hooks/useControllableValue';
 import './style.less';
+import useWidth from './hooks/useWidth';
 export interface Props {
   initialValue?: string;
   value?: string;
@@ -60,12 +62,63 @@ export default memo(
     const [code = '', setCode] = useControllableValue<string>(props);
     const shouldForbiddenEdit = props.disabled || props.readOnly || ('value' in props && !('onChange' in props));
     const tokensRef = useRef<(Prism.Token | string)[]>([]);
+    const tokenLinesRef = useRef<(Prism.Token | string)[][]>([]);
     const previousKeyboardEvent = useRef<KeyboardEvent | null>(null);
     const container = useRef<HTMLDivElement>(null);
-    const isFirstMount = useRef(true);
+    const width = useWidth(container);
+    const collapsedList = useRef<string[]>([]);
+    const lock = useRef(false);
 
     const codeRef = useRef(code);
     codeRef.current = code;
+
+    const onCollapse = (newCode: string, collapsedCode: string, uuid: number) => {
+      collapsedList.current[uuid] = collapsedCode;
+
+      const tokens = tokenize(newCode, lex);
+      const traverse = new Traverse(tokens);
+      try {
+        const fullTokens = tokenize(getExpandedCode(), lex);
+        const fullTraverse = new Traverse(fullTokens);
+        fullTraverse.validate({ mode: 'loose' });
+        setFormatError(null);
+      } catch (e) {
+        setFormatError(e);
+      }
+
+      setCode(traverse.format());
+    };
+
+    const getExpandedCode = (code: string = codeRef.current) => {
+      let newCode = code.replace(/(\{┉\}\u200c*)|(\[┉\]\u200c*)/g, (match) => {
+        const count = match.length - 3;
+        return collapsedList.current[count] || match;
+      });
+      if (/(\{┉\}\u200c*)|(\[┉\]\u200c*)/g.test(newCode)) {
+        newCode = getExpandedCode(newCode);
+      }
+      return newCode;
+    };
+
+    const onExpand = (uuid: number) => {
+      const newCode = codeRef.current.replace(/(\{┉\}\u200c*)|(\[┉\]\u200c*)/g, (match) => {
+        const count = match.length - 3;
+        return count === uuid ? collapsedList.current[uuid] : match;
+      });
+
+      const tokens = tokenize(newCode, lex);
+      const traverse = new Traverse(tokens);
+      try {
+        const fullTokens = tokenize(getExpandedCode(), lex);
+        const fullTraverse = new Traverse(fullTokens);
+        fullTraverse.validate({ mode: 'loose' });
+        setFormatError(null);
+      } catch (e) {
+        setFormatError(e);
+      }
+
+      setCode(traverse.format());
+    };
 
     useEffect(() => {
       if (shouldForbiddenEdit) {
@@ -94,7 +147,7 @@ export default memo(
       () => ({
         editorRef: textAreaRef.current,
         preRef: preElementRef.current,
-        value: codeRef.current,
+        value: getExpandedCode(),
         onChange: setCode,
         format,
       }),
@@ -103,8 +156,76 @@ export default memo(
 
     useEffect(() => {
       const textArea = textAreaRef.current!;
+
+      const onPaste = (e: ClipboardEvent) => {
+        e.preventDefault();
+        const clipboardData = e.clipboardData;
+        let pastedData = clipboardData?.getData('Text') || '';
+        const startPos = textArea?.selectionStart || 0;
+        const { leadingWhiteSpace } = getLinesByPos(codeRef.current, startPos);
+        pastedData = pastedData
+          .split('\n')
+          .map((line, index) => {
+            if (index === 0) {
+              return line;
+            }
+            return `${generateWhiteSpace(leadingWhiteSpace)}${line}`;
+          })
+          .join('\n');
+        insertText(pastedData);
+      };
+
+      const onCopy = (e: ClipboardEvent) => {
+        e.preventDefault();
+        const startPos = textArea?.selectionStart || 0;
+        const endPos = textArea?.selectionEnd || 0;
+        const selected = codeRef.current.slice(startPos, endPos);
+        const content = getCollapsedContent(collapsedList.current, selected);
+        copy(new Traverse(tokenize(content, lex)).format());
+      };
+
+      const onCut = (e: ClipboardEvent) => {
+        e.preventDefault();
+        const startPos = textArea?.selectionStart || 0;
+        const endPos = textArea?.selectionEnd || 0;
+        const newText = codeRef.current.slice(0, startPos).concat(codeRef.current.slice(endPos));
+        const selected = codeRef.current.slice(startPos, endPos);
+        const content = getCollapsedContent(collapsedList.current, selected);
+        copy(new Traverse(tokenize(content, lex)).format());
+        setCode(newText);
+        textArea?.setSelectionRange(startPos, startPos);
+      };
+
+      const onMouseDown = () => {
+        lock.current = true;
+      };
+
+      const onMouseUp = () => {
+        lock.current = false;
+      };
+
       // special char key down
       const keyDownHandler = (ev: KeyboardEvent) => {
+        if (lock.current) {
+          ev.preventDefault();
+          return;
+        }
+
+        const textArea = textAreaRef.current!;
+        const startPos = textArea?.selectionStart || 0;
+        const endPos = textArea?.selectionEnd || 0;
+        if (ev.code === 'Backspace') {
+          const index = getCurrentTokenIndex(tokensRef.current, startPos);
+          const currentToken = tokensRef.current[index];
+          if (isToken(currentToken) && currentToken.type === 'collapse') {
+            ev.preventDefault();
+            const tokens = getTokensOfCurrentLine(tokensRef.current, startPos);
+            const collapse = tokens.find((tok) => isToken(tok) && tok.type === 'collapse');
+            const uuid = (collapse?.length || 3) - 3;
+            onExpand(uuid);
+            textArea.setSelectionRange(startPos - collapsedList.current.length, endPos - collapsedList.current.length);
+          }
+        }
         previousKeyboardEvent.current = ev;
       };
       // format on blur
@@ -116,7 +237,9 @@ export default memo(
         const str = traverse.getString();
         setCode(str);
         try {
-          traverse.validate({ mode: 'loose' });
+          const fullTokens = tokenize(getExpandedCode(), lex);
+          const fullTraverse = new Traverse(fullTokens);
+          fullTraverse.validate({ mode: 'loose' });
           setFormatError(null);
         } catch (e) {
           setFormatError(e);
@@ -128,8 +251,44 @@ export default memo(
 
       // highlight active braces
       const cursorChangeHanlder = () => {
-        const startPos = textArea?.selectionStart || 0;
-        const endPos = textArea?.selectionEnd || 0;
+        let startPos = textArea?.selectionStart || 0;
+        let endPos = textArea?.selectionEnd || 0;
+        lock.current = false;
+        requestAnimationFrame(() => {
+          startPos = textArea?.selectionStart || 0;
+          endPos = textArea?.selectionEnd || 0;
+          if (codeRef.current[startPos] === '┉' && codeRef.current[endPos] === '┉') {
+            const tokens = getTokensOfCurrentLine(tokensRef.current, startPos);
+            const collapse = tokens.find((tok) => isToken(tok) && tok.type === 'collapse');
+            const uuid = (collapse?.length || 3) - 3;
+            onExpand(uuid);
+            textArea.setSelectionRange(startPos, endPos);
+          }
+          if (['}', ']'].includes(codeRef.current[startPos]) && ['}', ']'].includes(codeRef.current[endPos]) && codeRef.current[startPos - 1] === '┉') {
+            const tokens = getTokensOfCurrentLine(tokensRef.current, startPos);
+            const collapse = tokens.find((tok) => isToken(tok) && tok.type === 'collapse');
+            const uuid = (collapse?.length || 3) - 3;
+            onExpand(uuid);
+            textArea.setSelectionRange(startPos, endPos);
+          }
+
+          if (startPos !== endPos) {
+            const startIndex = getCurrentTokenIndex(tokensRef.current, startPos);
+            const endIndex = getCurrentTokenIndex(tokensRef.current, endPos);
+            const startToken = tokensRef.current[startIndex];
+            const endToken = tokensRef.current[endIndex];
+            if ((isToken(startToken) && startToken.type === 'collapse') || (isToken(endToken) && endToken.type === 'collapse')) {
+              if (endPos - startPos >= endToken.length && !['}', ']', '┉'].includes(codeRef.current[endPos])) {
+                return;
+              }
+              const collapse = isToken(startToken) && startToken.type === 'collapse' ? startToken : endToken;
+              const uuid = (collapse?.length || 3) - 3;
+              onExpand(uuid);
+              textArea.setSelectionRange(startPos, startPos);
+            }
+          }
+        });
+
         clearPairs(preElementRef.current!);
         if (Math.abs(startPos - endPos) > 1) {
           return;
@@ -169,16 +328,28 @@ export default memo(
         setFormatError(null);
       };
 
+      textArea?.addEventListener('paste', onPaste);
+      textArea?.addEventListener('copy', onCopy);
+      textArea?.addEventListener('cut', onCut);
+      textArea?.addEventListener('mousedown', onMouseDown);
+      textArea?.addEventListener('mouseup', onMouseUp);
       textArea?.addEventListener('keydown', keyDownHandler);
       textArea?.addEventListener('blur', blurHandler);
       textArea?.addEventListener('focus', focusHandler);
+      textArea?.addEventListener('select', cursorChangeHanlder);
       textArea?.addEventListener('keyup', cursorChangeHanlder);
       textArea?.addEventListener('click', cursorChangeHanlder);
       return () => {
         // 卸载 hook
+        textArea?.removeEventListener('paste', onPaste);
+        textArea?.removeEventListener('copy', onCopy);
+        textArea?.removeEventListener('cut', onCut);
+        textArea?.removeEventListener('mousedown', onMouseDown);
+        textArea?.removeEventListener('mouseup', onMouseUp);
         textArea?.removeEventListener('keydown', keyDownHandler);
         textArea?.removeEventListener('blur', blurHandler);
         textArea?.removeEventListener('focus', focusHandler);
+        textArea?.removeEventListener('select', cursorChangeHanlder);
         textArea?.removeEventListener('keyup', cursorChangeHanlder);
         textArea?.removeEventListener('click', cursorChangeHanlder);
       };
@@ -293,11 +464,16 @@ export default memo(
 
       if (props.showLineNumber) {
         setTimeout(() => {
-          addLineNumber({
-            ...env,
-            code: codeRef.current!,
-            tokens: tokensRef.current!,
-          });
+          addLineNumber(
+            {
+              ...env,
+              code: codeRef.current!,
+              collapsedList: collapsedList.current,
+              tokens: tokensRef.current!,
+            },
+            onCollapse,
+            onExpand,
+          );
         }, 32);
       }
     };
@@ -305,6 +481,7 @@ export default memo(
     const highlight = (code: string) => {
       const env: RootEnv = {
         code,
+        collapsedList: collapsedList.current,
         grammar: lex,
         language: 'json5',
         tokens: [],
@@ -313,15 +490,21 @@ export default memo(
       };
       env.tokens = tokenize(code, lex);
       afterTokenizeHook(env);
-      markErrorToken(env.tokens, formatError);
+      env.tokenLines = markErrorToken(env.tokens, formatError);
+      tokenLinesRef.current = env.tokenLines;
+      env.fullTokens = getExpandedCode();
       const htmlString = tokenStreamToHtml(env.tokens, env.language!);
       autoFill(env);
       if (props.showLineNumber) {
-        addLineNumber(env);
+        addLineNumber(env, onCollapse, onExpand);
       }
       tokensRef.current = env.tokens;
       return htmlString;
     };
+
+    useEffect(() => {
+      highlight(codeRef.current);
+    }, [width]);
 
     return (
       <div
@@ -340,10 +523,6 @@ export default memo(
           placeholder={props.placeholder}
           onValueChange={setCode}
           highlight={(code: string) => {
-            if (isFirstMount.current) {
-              isFirstMount.current = false;
-              requestAnimationFrame(() => highlight(code));
-            }
             return highlight(code);
           }}
           padding={8}
