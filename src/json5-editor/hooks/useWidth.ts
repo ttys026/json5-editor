@@ -1,5 +1,4 @@
 import { useState, useLayoutEffect } from 'react';
-import ResizeObserver from 'resize-observer-polyfill';
 
 function useWidth(target: React.RefObject<HTMLDivElement>): number {
   const [state, setState] = useState<number>(() => {

@@ -160,7 +160,7 @@ function stringify(token: WrappedTokenStream, language: string): string {
   }
   if (Array.isArray(token)) {
     let ret = '';
-    token.forEach((tok) => {
+    token.forEach((tok: WrappedTokenStream) => {
       ret += stringify(tok, language);
     });
     return ret;
