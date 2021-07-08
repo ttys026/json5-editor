@@ -13,8 +13,8 @@ type WrappedTokenStream = WrappedToken | WrappedToken[] | string | string[];
 
 export const lex: Prism.Grammar = {
   collapse: [
-    { pattern: /\{\┉\}\u200c*/, alias: 'object' },
-    { pattern: /\[\┉\]\u200c*/, alias: 'array' },
+    { pattern: /\{┉\}\u200c*/, alias: 'object' },
+    { pattern: /\[┉\]\u200c*/, alias: 'array' },
   ],
   property: [
     { pattern: /("|')(?:\\(?:\r\n?|\n|.)|(?!\1)[^\\\r\n])*\1\*?(?=\s*:)/g, greedy: true },

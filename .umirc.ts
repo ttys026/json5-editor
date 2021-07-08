@@ -8,4 +8,5 @@ export default defineConfig({
   base: '/json5-editor',
   publicPath: '/json5-editor/',
   exportStatic: {},
+  hash: true,
 });
