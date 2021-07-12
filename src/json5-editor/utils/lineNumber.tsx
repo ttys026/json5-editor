@@ -146,6 +146,12 @@ export function addLineNumber(env: RootEnv, onCollapse: (newCode: string, collap
               const startLineIndex = i;
               let deepth = 0;
               const [firstLine] = rest;
+              const leadingWhiteSpace = firstLine.reduce((acc, ele) => {
+                if (ele.type === 'leading') {
+                  return acc + ele.length;
+                }
+                return acc;
+              }, 0);
               startColumnNo = firstLine
                 .slice(
                   0,
@@ -178,9 +184,9 @@ export function addLineNumber(env: RootEnv, onCollapse: (newCode: string, collap
                     return ln.slice(startColumnNo);
                   }
                   if (index === arr.length - 1) {
-                    return ln.slice(endColumnNo);
+                    return `${Array(leadingWhiteSpace + 1).join(' ')}${ln.slice(endColumnNo)}`;
                   }
-                  return ln;
+                  return `${Array(leadingWhiteSpace + 3).join(' ')}${ln.trim()}`;
                 })
                 .join('\n');
               const prePart = codeLines.slice(0, Math.max(startLineIndex, 0));
@@ -188,9 +194,9 @@ export function addLineNumber(env: RootEnv, onCollapse: (newCode: string, collap
               const cacheLength = env.collapsedList.length;
               const uuid = Array(cacheLength + 1).join('\u200c');
               const newCode = prePart
-                .concat(codeLines[startLineIndex].slice(0, startColumnNo))
-                .concat(start === '{' ? `${objectCollapse}${uuid}` : `${arrayCollapse}${uuid}`)
-                .concat(codeLines[endLineIndex].slice(endColumnNo + 1))
+                .concat(
+                  `${codeLines[startLineIndex].slice(0, startColumnNo)}${start === '{' ? `${objectCollapse}${uuid}` : `${arrayCollapse}${uuid}`}${codeLines[endLineIndex].slice(endColumnNo + 1)}`,
+                )
                 .concat(endPart)
                 .join('\n');
 

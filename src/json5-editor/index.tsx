@@ -22,9 +22,9 @@ import copy from 'copy-to-clipboard';
 import { lex, afterTokenizeHook, tokenStreamToHtml } from './utils/prism';
 import { addLineNumber, getCollapsedContent } from './utils/lineNumber';
 import { Traverse, ValidateError } from './utils/format';
-import useControllableValue from './hooks/useControllableValue';
 import './style.less';
 import useWidth from './hooks/useWidth';
+import useUpdateEffect from './hooks/useUpdateEffect';
 export interface Props {
   initialValue?: string;
   value?: string;
@@ -59,7 +59,7 @@ export default memo(
     const textAreaRef = useRef<HTMLTextAreaElement | null>(null);
     const preElementRef = useRef<HTMLPreElement | null>(null);
     const [formatError, setFormatError] = useState<ValidateError | null>(null);
-    const [code = '', setCode] = useControllableValue<string>(props);
+    const [code = '', setCode] = useState<string>(props.value || props.initialValue || '');
     const shouldForbiddenEdit = props.disabled || props.readOnly || ('value' in props && !('onChange' in props));
     const tokensRef = useRef<(Prism.Token | string)[]>([]);
     const tokenLinesRef = useRef<(Prism.Token | string)[][]>([]);
@@ -68,6 +68,8 @@ export default memo(
     const width = useWidth(container);
     const collapsedList = useRef<string[]>([]);
     const lock = useRef(false);
+    const onChangeRef = useRef(props.onChange);
+    onChangeRef.current = props.onChange;
 
     const codeRef = useRef(code);
     codeRef.current = code;
@@ -88,6 +90,13 @@ export default memo(
 
       setCode(traverse.format());
     };
+
+    useUpdateEffect(() => {
+      if (onChangeRef.current) {
+        const formatted = getExpandedCode();
+        onChangeRef.current(formatted);
+      }
+    }, [code]);
 
     const getExpandedCode = (code: string = codeRef.current) => {
       let newCode = code.replace(/(\{┉\}\u200c*)|(\[┉\]\u200c*)/g, (match) => {
@@ -176,24 +185,28 @@ export default memo(
       };
 
       const onCopy = (e: ClipboardEvent) => {
-        e.preventDefault();
         const startPos = textArea?.selectionStart || 0;
         const endPos = textArea?.selectionEnd || 0;
         const selected = codeRef.current.slice(startPos, endPos);
         const content = getCollapsedContent(collapsedList.current, selected);
-        copy(new Traverse(tokenize(content, lex)).format());
+        if (/(\{┉\}\u200c*)|(\[┉\]\u200c*)/g.test(content)) {
+          e.preventDefault();
+          copy(new Traverse(tokenize(content, lex)).format());
+        }
       };
 
       const onCut = (e: ClipboardEvent) => {
-        e.preventDefault();
         const startPos = textArea?.selectionStart || 0;
         const endPos = textArea?.selectionEnd || 0;
         const newText = codeRef.current.slice(0, startPos).concat(codeRef.current.slice(endPos));
         const selected = codeRef.current.slice(startPos, endPos);
         const content = getCollapsedContent(collapsedList.current, selected);
-        copy(new Traverse(tokenize(content, lex)).format());
-        setCode(newText);
-        textArea?.setSelectionRange(startPos, startPos);
+        if (/(\{┉\}\u200c*)|(\[┉\]\u200c*)/g.test(content)) {
+          e.preventDefault();
+          copy(new Traverse(tokenize(content, lex)).format());
+          setCode(newText);
+          textArea?.setSelectionRange(startPos, startPos);
+        }
       };
 
       const onMouseDown = () => {
@@ -512,7 +525,7 @@ export default memo(
         style={{ maxHeight: 600 }}
         className={classNames('json5-editor-wrapper', Boolean(formatError) ? 'json5-editor-wrapper-has-error' : '', props.className, props.disabled ? 'json5-editor-wrapper-disabled' : '')}
       >
-        <div className="line-numbers-rows" />
+        {props.showLineNumber && <div className="line-numbers-rows" />}
         <Editor
           ref={(r: any) => {
             textAreaRef.current = r?._input;
