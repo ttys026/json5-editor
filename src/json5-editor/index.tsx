@@ -92,6 +92,10 @@ export default memo(
     };
 
     useUpdateEffect(() => {
+      setCode(props.value || '');
+    }, [props.value]);
+
+    useUpdateEffect(() => {
       if (onChangeRef.current) {
         const formatted = getExpandedCode();
         onChangeRef.current(formatted);
