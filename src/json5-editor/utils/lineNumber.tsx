@@ -146,12 +146,6 @@ export function addLineNumber(env: RootEnv, onCollapse: (newCode: string, collap
               const startLineIndex = i;
               let deepth = 0;
               const [firstLine] = rest;
-              const leadingWhiteSpace = firstLine.reduce((acc, ele) => {
-                if (ele.type === 'leading') {
-                  return acc + ele.length;
-                }
-                return acc;
-              }, 0);
               startColumnNo = firstLine
                 .slice(
                   0,
@@ -184,9 +178,9 @@ export function addLineNumber(env: RootEnv, onCollapse: (newCode: string, collap
                     return ln.slice(startColumnNo);
                   }
                   if (index === arr.length - 1) {
-                    return `${Array(leadingWhiteSpace + 1).join(' ')}${ln.slice(endColumnNo)}`;
+                    return ln.slice(endColumnNo);
                   }
-                  return `${Array(leadingWhiteSpace + 3).join(' ')}${ln.trim()}`;
+                  return ln;
                 })
                 .join('\n');
               const prePart = codeLines.slice(0, Math.max(startLineIndex, 0));
@@ -287,6 +281,7 @@ export function addLineNumber(env: RootEnv, onCollapse: (newCode: string, collap
             return (
               <span key={i}>
                 <code>{i + collapsedLineCount + 1}</code>
+                <span>&nbsp;</span>
               </span>
             );
           })}

@@ -36,21 +36,26 @@ export const lex: Prism.Grammar = {
     alias: 'keyword',
     pattern: /\bnull\b/,
   },
-  // only match leading spaces in the first line
-  indent: {
-    pattern: /^[ ]{2}/g,
-    greedy: true,
-  },
   // match leading spaces for every lines besides the first line
-  leading: {
-    pattern: /(\r?\n)+[ ]*/g,
-    lookbehind: true,
-    inside: {
-      indent: {
-        pattern: /[ ]{2}/,
+  leading: [
+    {
+      pattern: /(\r?\n)+[ ]*/g,
+      lookbehind: true,
+      inside: {
+        indent: {
+          pattern: /[ ]{2}/,
+        },
       },
     },
-  },
+    {
+      pattern: /^[ ]*/g,
+      inside: {
+        indent: {
+          pattern: /[ ]{2}/,
+        },
+      },
+    },
+  ],
   linebreak: /\r?\n/,
   unknown: /(?!\s).+(?=\s*)/,
 };

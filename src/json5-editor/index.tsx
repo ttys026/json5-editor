@@ -74,35 +74,7 @@ export default memo(
     const codeRef = useRef(code);
     codeRef.current = code;
 
-    const onCollapse = (newCode: string, collapsedCode: string, uuid: number) => {
-      collapsedList.current[uuid] = collapsedCode;
-
-      const tokens = tokenize(newCode, lex);
-      const traverse = new Traverse(tokens);
-      try {
-        const fullTokens = tokenize(getExpandedCode(), lex);
-        const fullTraverse = new Traverse(fullTokens);
-        fullTraverse.validate({ mode: 'loose' });
-        setFormatError(null);
-      } catch (e) {
-        setFormatError(e);
-      }
-
-      setCode(traverse.format());
-    };
-
-    useUpdateEffect(() => {
-      setCode(props.value || '');
-    }, [props.value]);
-
-    useUpdateEffect(() => {
-      if (onChangeRef.current) {
-        const formatted = getExpandedCode();
-        onChangeRef.current(formatted);
-      }
-    }, [code]);
-
-    const getExpandedCode = (code: string = codeRef.current) => {
+    const getExpandedCode = useCallback((code: string = codeRef.current) => {
       let newCode = code.replace(/(\{┉\}\u200c*)|(\[┉\]\u200c*)/g, (match) => {
         const count = match.length - 3;
         return collapsedList.current[count] || match;
@@ -110,8 +82,46 @@ export default memo(
       if (/(\{┉\}\u200c*)|(\[┉\]\u200c*)/g.test(newCode)) {
         newCode = getExpandedCode(newCode);
       }
-      return newCode;
+
+      const fullTokens = tokenize(newCode, lex);
+      const fullTraverse = new Traverse(fullTokens);
+
+      return fullTraverse.format();
+    }, []);
+
+    const validateFullCode = () => {
+      try {
+        const fullTokens = tokenize(getExpandedCode(), lex);
+        const fullTraverse = new Traverse(fullTokens);
+        fullTraverse.validate({ mode: 'loose' });
+        setFormatError(null);
+      } catch (e) {
+        setFormatError(e);
+        if (process.env.NODE_ENV === 'development') {
+          console.log(e);
+        }
+      }
     };
+
+    const expandCode = useMemo(() => {
+      return getExpandedCode();
+    }, [code]);
+
+    const onCollapse = (newCode: string, collapsedCode: string, uuid: number) => {
+      collapsedList.current[uuid] = collapsedCode;
+
+      const tokens = tokenize(newCode, lex);
+      const traverse = new Traverse(tokens);
+      setCode(traverse.format());
+      validateFullCode();
+    };
+
+    useUpdateEffect(() => {
+      if (onChangeRef.current) {
+        console.log('123', expandCode);
+        onChangeRef.current(expandCode);
+      }
+    }, [expandCode]);
 
     const onExpand = (uuid: number) => {
       const newCode = codeRef.current.replace(/(\{┉\}\u200c*)|(\[┉\]\u200c*)/g, (match) => {
@@ -121,16 +131,9 @@ export default memo(
 
       const tokens = tokenize(newCode, lex);
       const traverse = new Traverse(tokens);
-      try {
-        const fullTokens = tokenize(getExpandedCode(), lex);
-        const fullTraverse = new Traverse(fullTokens);
-        fullTraverse.validate({ mode: 'loose' });
-        setFormatError(null);
-      } catch (e) {
-        setFormatError(e);
-      }
 
       setCode(traverse.format());
+      validateFullCode();
     };
 
     useEffect(() => {
@@ -193,7 +196,7 @@ export default memo(
         const endPos = textArea?.selectionEnd || 0;
         const selected = codeRef.current.slice(startPos, endPos);
         const content = getCollapsedContent(collapsedList.current, selected);
-        if (/(\{┉\}\u200c*)|(\[┉\]\u200c*)/g.test(content)) {
+        if (/(\{┉\}\u200c*)|(\[┉\]\u200c*)/g.test(selected)) {
           e.preventDefault();
           copy(new Traverse(tokenize(content, lex)).format());
         }
@@ -205,7 +208,7 @@ export default memo(
         const newText = codeRef.current.slice(0, startPos).concat(codeRef.current.slice(endPos));
         const selected = codeRef.current.slice(startPos, endPos);
         const content = getCollapsedContent(collapsedList.current, selected);
-        if (/(\{┉\}\u200c*)|(\[┉\]\u200c*)/g.test(content)) {
+        if (/(\{┉\}\u200c*)|(\[┉\]\u200c*)/g.test(selected)) {
           e.preventDefault();
           copy(new Traverse(tokenize(content, lex)).format());
           setCode(newText);
@@ -253,17 +256,7 @@ export default memo(
         traverse.format();
         const str = traverse.getString();
         setCode(str);
-        try {
-          const fullTokens = tokenize(getExpandedCode(), lex);
-          const fullTraverse = new Traverse(fullTokens);
-          fullTraverse.validate({ mode: 'loose' });
-          setFormatError(null);
-        } catch (e) {
-          setFormatError(e);
-          if (process.env.NODE_ENV === 'development') {
-            console.log(e);
-          }
-        }
+        validateFullCode();
       };
 
       // highlight active braces
