@@ -109,7 +109,6 @@ export default memo(
 
     const onCollapse = (newCode: string, collapsedCode: string, uuid: number) => {
       collapsedList.current[uuid] = collapsedCode;
-
       const tokens = tokenize(newCode, lex);
       const traverse = new Traverse(tokens);
       setCode(traverse.format());
@@ -118,7 +117,6 @@ export default memo(
 
     useUpdateEffect(() => {
       if (onChangeRef.current) {
-        console.log('123', expandCode);
         onChangeRef.current(expandCode);
       }
     }, [expandCode]);

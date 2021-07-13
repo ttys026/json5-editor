@@ -49,6 +49,7 @@ export const lex: Prism.Grammar = {
     },
     {
       pattern: /^[ ]*/g,
+      greedy: true,
       inside: {
         indent: {
           pattern: /[ ]{2}/,
