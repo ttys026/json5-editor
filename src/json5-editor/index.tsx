@@ -59,7 +59,7 @@ export default memo(
     const textAreaRef = useRef<HTMLTextAreaElement | null>(null);
     const preElementRef = useRef<HTMLPreElement | null>(null);
     const [formatError, setFormatError] = useState<ValidateError | null>(null);
-    const [code = '', setCode] = useState<string>(props.value || props.initialValue || '');
+    const [code = '', _setCode] = useState<string>(props.value || props.initialValue || '');
     const shouldForbiddenEdit = props.disabled || props.readOnly || ('value' in props && !('onChange' in props));
     const tokensRef = useRef<(Prism.Token | string)[]>([]);
     const tokenLinesRef = useRef<(Prism.Token | string)[][]>([]);
@@ -103,23 +103,27 @@ export default memo(
       }
     };
 
-    const expandCode = useMemo(() => {
-      return getExpandedCode();
-    }, [code]);
+    const setCode: React.Dispatch<React.SetStateAction<string>> = (val) => {
+      if (!('value' in props)) {
+        _setCode(val);
+      }
+      if (props.onChange) {
+        props.onChange(getExpandedCode());
+      }
+    };
+
+    useUpdateEffect(() => {
+      if ('value' in props) {
+        _setCode(props.value || '');
+      }
+    }, [props.value]);
 
     const onCollapse = (newCode: string, collapsedCode: string, uuid: number) => {
       collapsedList.current[uuid] = collapsedCode;
       const tokens = tokenize(newCode, lex);
       const traverse = new Traverse(tokens);
       setCode(traverse.format());
-      validateFullCode();
     };
-
-    useUpdateEffect(() => {
-      if (onChangeRef.current) {
-        onChangeRef.current(expandCode);
-      }
-    }, [expandCode]);
 
     const onExpand = (uuid: number) => {
       const newCode = codeRef.current.replace(/(\{┉\}\u200c*)|(\[┉\]\u200c*)/g, (match) => {
@@ -158,13 +162,19 @@ export default memo(
 
     useImperativeHandle(
       ref,
-      () => ({
-        editorRef: textAreaRef.current,
-        preRef: preElementRef.current,
-        value: getExpandedCode(),
-        onChange: setCode,
-        format,
-      }),
+      () => {
+        const ret = {
+          editorRef: textAreaRef.current,
+          preRef: preElementRef.current,
+          value: '',
+          onChange: setCode,
+          format,
+        };
+        Object.defineProperty(ret, 'value', {
+          get: getExpandedCode,
+        });
+        return ret;
+      },
       [],
     );
 
