@@ -35,6 +35,7 @@ export interface Props {
   disabled?: boolean;
   readOnly?: boolean;
   showLineNumber?: boolean;
+  formatConfig?: Omit<FormatConfig, 'type'>;
 }
 
 export interface RefProps {
@@ -46,10 +47,14 @@ export interface RefProps {
 }
 
 export type RootEnv = Prism.Environment & { tokens: (Prism.Token | string)[]; code: string; element: HTMLDivElement };
+export type FormatConfig = {
+  type?: 'whole' | 'segment';
+  propertyQuotes?: 'single' | 'double' | 'preserve' | 'preserve';
+};
 
-export const formatJSON5 = (code: string) => {
+export const formatJSON5 = (code: string, config?: FormatConfig) => {
   const tokens = tokenize(code, lex);
-  const traverse = new Traverse(tokens);
+  const traverse = new Traverse(tokens, config);
   traverse.format();
   return traverse.getString();
 };
@@ -72,6 +77,8 @@ export default memo(
     onChangeRef.current = props.onChange;
     const editStarted = useRef(false);
     const isFocused = useRef(false);
+    const formatConfig = useRef(props.formatConfig);
+    formatConfig.current = props.formatConfig;
 
     const codeRef = useRef(code);
     codeRef.current = code;
@@ -86,7 +93,7 @@ export default memo(
       }
 
       const fullTokens = tokenize(newCode, lex);
-      const fullTraverse = new Traverse(fullTokens);
+      const fullTraverse = new Traverse(fullTokens, formatConfig.current);
 
       return fullTraverse.format();
     }, []);
@@ -94,7 +101,7 @@ export default memo(
     const validateFullCode = () => {
       try {
         const fullTokens = tokenize(getExpandedCode(), lex);
-        const fullTraverse = new Traverse(fullTokens);
+        const fullTraverse = new Traverse(fullTokens, formatConfig.current);
         fullTraverse.validate({ mode: 'loose' });
         setFormatError(null);
       } catch (e) {
@@ -129,7 +136,7 @@ export default memo(
     const onCollapse = (newCode: string, collapsedCode: string, uuid: number) => {
       collapsedList.current[uuid] = collapsedCode;
       const tokens = tokenize(newCode, lex);
-      const traverse = new Traverse(tokens);
+      const traverse = new Traverse(tokens, formatConfig.current);
       _setCode(traverse.format());
     };
 
@@ -140,7 +147,7 @@ export default memo(
       });
 
       const tokens = tokenize(newCode, lex);
-      const traverse = new Traverse(tokens);
+      const traverse = new Traverse(tokens, formatConfig.current);
 
       _setCode(traverse.format());
       validateFullCode();
@@ -214,7 +221,7 @@ export default memo(
         const content = getCollapsedContent(collapsedList.current, selected);
         if (/(\{┉\}\u200c*)|(\[┉\]\u200c*)/g.test(selected)) {
           e.preventDefault();
-          copy(new Traverse(tokenize(content, lex)).format());
+          copy(new Traverse(tokenize(content, lex), formatConfig.current).format());
         }
       };
 
@@ -226,7 +233,7 @@ export default memo(
         const content = getCollapsedContent(collapsedList.current, selected);
         if (/(\{┉\}\u200c*)|(\[┉\]\u200c*)/g.test(selected)) {
           e.preventDefault();
-          copy(new Traverse(tokenize(content, lex)).format());
+          copy(new Traverse(tokenize(content, lex), formatConfig.current).format());
           setCode(newText);
           textArea?.setSelectionRange(startPos, startPos);
         }
@@ -269,7 +276,7 @@ export default memo(
         isFocused.current = false;
         clearPairs(preElementRef.current!);
         const prevTokens = tokensRef.current;
-        const traverse = new Traverse(prevTokens);
+        const traverse = new Traverse(prevTokens, formatConfig.current);
         traverse.format();
         const str = traverse.getString();
         setCode(str);
@@ -444,7 +451,7 @@ export default memo(
             }
 
             const fullListLength = getLengthOfToken(fullList);
-            const formatted = new Traverse(fullList, { type: 'segment' }).format();
+            const formatted = new Traverse(fullList, { ...formatConfig.current, type: 'segment' }).format();
 
             textArea?.setSelectionRange(startPos - fullListLength - 1, startPos);
 
@@ -471,7 +478,7 @@ export default memo(
             const fullListLength = getLengthOfToken(fullList);
             const previousList = getTokensOfCurrentLine(env.tokens, startPos - fullListLength - 1);
             leadingWhiteSpace = previousList.some((tok) => isToken(tok) && tokenContentEquals(tok, '{')) && startPos !== fullListLength ? leadingWhiteSpace + 2 : leadingWhiteSpace;
-            const formatted = new Traverse(fullList, { type: 'segment' }).format();
+            const formatted = new Traverse(fullList, { ...formatConfig.current, type: 'segment' }).format();
             textArea?.setSelectionRange(startPos - fullListLength, startPos);
             const whiteSpace = generateWhiteSpace(leadingWhiteSpace);
             insertText(`${whiteSpace}${formatted} `);

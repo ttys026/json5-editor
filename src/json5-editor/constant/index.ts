@@ -4,3 +4,7 @@ export const endList: (Prism.TokenStream | undefined)[] = ['}', ']', ')'];
 export const keywords = ['true', 'false', 'null', 'undefined'];
 export const arrayCollapse = '[┉]';
 export const objectCollapse = '{┉}';
+export const defaultConfig = {
+  type: 'whole' as const,
+  propertyQuotes: 'preserve' as const,
+};

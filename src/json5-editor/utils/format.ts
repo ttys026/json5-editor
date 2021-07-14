@@ -1,11 +1,8 @@
 import type { Token, TokenStream } from 'prismjs';
-import { startList, endList } from '../constant';
+import { FormatConfig } from '..';
+import { startList, endList, defaultConfig } from '../constant';
 
 type CookedToken = Token & { index: number; lineNo?: number; columnNo?: number };
-
-export interface Config {
-  type: 'whole' | 'segment';
-}
 
 export class ValidateError extends Error {
   public lineNo: string;
@@ -38,13 +35,11 @@ export class Traverse {
   private output = '';
   private indentSize = 2;
   private valueTypes = ['string', 'number', 'boolean', 'null', 'unknown', 'collapse'];
-  private config: Config = {
-    type: 'whole',
-  };
+  private config: FormatConfig = defaultConfig;
 
-  constructor(tokens: (Token | string)[], config?: Config) {
+  constructor(tokens: (Token | string)[], config?: FormatConfig) {
     if (config) {
-      this.config = config;
+      this.config = { ...defaultConfig, ...config };
     }
     this.rawTokens = tokens;
     this.cookTokens();
@@ -65,7 +60,35 @@ export class Traverse {
             type: 'unknown',
           } as Token;
         }
-        return { ...ele };
+        if (ele.type === 'property') {
+          const needWrap = typeof ele.content === 'string' && !ele.content.startsWith('"') && !ele.content.startsWith("'");
+          const needReplace = typeof ele.content === 'string' && ele.content.startsWith("'");
+          let newContent = ele.content as string;
+          switch (this.config.propertyQuotes) {
+            case 'double': {
+              if (needWrap) {
+                newContent = `"${newContent}"`;
+              }
+              if (needReplace) {
+                newContent = `"${newContent.slice(1, newContent.length - 1)}"`;
+              }
+              return { ...ele, content: newContent, length: newContent.length };
+            }
+            case 'single': {
+              if (needWrap) {
+                newContent = `'${newContent}'`;
+              }
+              if (needReplace) {
+                newContent = `'${newContent.slice(1, newContent.length - 1)}'`;
+              }
+              return { ...ele, content: newContent, length: newContent.length };
+            }
+            default: {
+              return ele;
+            }
+          }
+        }
+        return ele;
       })
       .filter((ele) => ele.length !== 0);
 
