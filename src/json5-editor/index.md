@@ -54,7 +54,7 @@ export default () => {
       form={form}
     >
       <Form.Item name="code">
-        <Editor disabled />
+        <Editor showLineNumber disabled />
       </Form.Item>
       <button onClick={() => setKey((k) => k + 1)}>rerender</button>
       <button onClick={() => console.log(form.getFieldsValue())}>getFieldsValue</button>
@@ -90,6 +90,7 @@ export default () => {
     <>
       <Editor readOnly value={value} onChange={setValue} />
       <Editor value={value.slice(0)} />
+      <Editor value={value} onChange={setValue} />
     </>
   );
 };

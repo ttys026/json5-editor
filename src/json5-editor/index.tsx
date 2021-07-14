@@ -70,6 +70,8 @@ export default memo(
     const lock = useRef(false);
     const onChangeRef = useRef(props.onChange);
     onChangeRef.current = props.onChange;
+    const editStarted = useRef(false);
+    const isFocused = useRef(false);
 
     const codeRef = useRef(code);
     codeRef.current = code;
@@ -104,17 +106,23 @@ export default memo(
     };
 
     const setCode: React.Dispatch<React.SetStateAction<string>> = (val) => {
-      if (!('value' in props)) {
-        _setCode(val);
-      }
-      if (props.onChange) {
-        props.onChange(getExpandedCode());
-      }
+      _setCode(val);
+      editStarted.current = true;
     };
 
+    useEffect(() => {
+      if (editStarted.current) {
+        if (props.onChange) {
+          props.onChange(getExpandedCode());
+        }
+        editStarted.current = false;
+      }
+    }, [code]);
+
     useUpdateEffect(() => {
-      if ('value' in props) {
+      if (!isFocused.current) {
         _setCode(props.value || '');
+        editStarted.current = false;
       }
     }, [props.value]);
 
@@ -122,7 +130,7 @@ export default memo(
       collapsedList.current[uuid] = collapsedCode;
       const tokens = tokenize(newCode, lex);
       const traverse = new Traverse(tokens);
-      setCode(traverse.format());
+      _setCode(traverse.format());
     };
 
     const onExpand = (uuid: number) => {
@@ -134,7 +142,7 @@ export default memo(
       const tokens = tokenize(newCode, lex);
       const traverse = new Traverse(tokens);
 
-      setCode(traverse.format());
+      _setCode(traverse.format());
       validateFullCode();
     };
 
@@ -258,6 +266,7 @@ export default memo(
       };
       // format on blur
       const blurHandler = (ev: FocusEvent) => {
+        isFocused.current = false;
         clearPairs(preElementRef.current!);
         const prevTokens = tokensRef.current;
         const traverse = new Traverse(prevTokens);
@@ -343,6 +352,7 @@ export default memo(
       };
 
       const focusHandler = () => {
+        isFocused.current = true;
         setFormatError(null);
       };
 
