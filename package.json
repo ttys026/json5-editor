@@ -1,6 +1,6 @@
 {
   "name": "json5-editor",
-  "version": "1.3.7",
+  "version": "1.3.8",
   "scripts": {
     "start": "dumi dev",
     "docs:build": "dumi build",
