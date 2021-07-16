@@ -312,7 +312,7 @@ export class Traverse {
         this.output += ',';
       }
       // add new line when start a new property/item in object/array,
-      if (startList.includes(ahead.content) || this.valueTypes.includes(ahead.type)) {
+      if (['{', '['].includes(ahead.content as string) || this.valueTypes.includes(ahead.type)) {
         this.addNewLine();
       }
     }
