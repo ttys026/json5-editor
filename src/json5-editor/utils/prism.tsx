@@ -1,6 +1,9 @@
+import React from 'react';
+import { tokenize } from 'prismjs/components/prism-core';
 import { endList, startList } from '../constant';
-import { isToken } from './autoComplete';
+import { getTokenContent, isToken } from './autoComplete';
 
+// const cacheMap = new Map<symbol, { tokens: (string | Prism.Token)[]; code: string }>();
 interface WrappedToken extends Prism.Token {
   tag: string;
   classes: string[];
@@ -48,7 +51,7 @@ export const lex: Prism.Grammar = {
       },
     },
     {
-      pattern: /^[ ]*/g,
+      pattern: /^.*/g,
       greedy: true,
       inside: {
         indent: {
@@ -59,6 +62,66 @@ export const lex: Prism.Grammar = {
   ],
   linebreak: /\r?\n/,
   unknown: /(?!\s).+(?=\s*)/,
+};
+
+// TODO: implement tokenize cache
+export const tokenizeWithCache = (code: string, lex: Prism.Grammar, editorId: symbol) => {
+  // const cache = cacheMap.get(editorId);
+  // // no cache
+  // if (!cache) {
+  //   const latestTokens = tokenize(code, lex);
+  //   cacheMap.set(editorId, { tokens: latestTokens, code });
+  //   return latestTokens;
+  // }
+  // // cache exist
+  // let tokenStartIndex = 0;
+  // let tokenStartLength = 0;
+  // let diffStart = 0;
+  // // loop from start to find first diff char
+  // const { code: prevCode, tokens: prevTokens } = cache;
+  // for (let i = 0; i < code.length; i++) {
+  //   if (code[i] === prevCode[i]) {
+  //     if (tokenStartLength + prevTokens[tokenStartIndex].length >= i) {
+  //       tokenStartLength += prevTokens[tokenStartIndex].length;
+  //       tokenStartIndex += 1;
+  //     }
+  //     i++;
+  //   } else {
+  //     diffStart = i;
+  //     break;
+  //   }
+  // }
+
+  // let tokenEndIndex = prevTokens.length - 1;
+  // let tokenEndLength = code.length;
+  // let diffEnd = code.length;
+  // // loop from end to find last diff char
+  // for (let i = code.length - 1; i >= 0; i--) {
+  //   if (code[i] === prevCode[i]) {
+  //     if (tokenEndLength - i >= prevTokens[tokenEndIndex].length) {
+  //       tokenEndLength -= prevTokens[tokenEndIndex].length;
+  //       tokenEndIndex -= 1;
+  //     }
+  //     i--;
+  //   } else {
+  //     diffEnd = i;
+  //     break;
+  //   }
+  // }
+
+  // if(diffStart === 0 && diffEnd === code.length) {
+  //   return prevTokens;
+  // }
+
+  // const diffCode = code.slice(diffStart, diffEnd);
+  // const diffTokens = tokenize(diffCode, lex);
+  // if (tokenStartIndex > 0 && tokenEndIndex > tokenStartIndex) {
+  //   const newTokens = [...prevTokens.slice(0, tokenStartIndex), ...diffTokens, ...prevTokens.slice(tokenEndIndex)];
+  //   cacheMap.set(editorId, { tokens: newTokens, code });
+  //   return newTokens;
+  // }
+
+  return tokenize(code, lex);
 };
 
 /**
@@ -160,21 +223,21 @@ function preWrap(token: Prism.Token | Prism.TokenStream | string, language: stri
   return env;
 }
 
-function stringify(token: WrappedTokenStream, language: string): string {
+function stringify(token: WrappedTokenStream): string {
   if (typeof token == 'string') {
     return token;
   }
   if (Array.isArray(token)) {
     let ret = '';
     token.forEach((tok: WrappedTokenStream) => {
-      ret += stringify(tok, language);
+      ret += stringify(tok);
     });
     return ret;
   }
 
   let env: Prism.hooks.RequiredEnvironment<'classes' | 'content', Prism.Environment> = {
     ...token,
-    content: stringify(token.content, language),
+    content: stringify(token.content),
   };
 
   if (startList.includes(env.content)) {
@@ -231,5 +294,58 @@ export const tokenStreamToHtml = (token: Prism.Token | Prism.TokenStream | strin
     }
   }
 
-  return stringify(tokens, language);
+  return stringify(tokens);
+};
+
+export const tokenToNode = (token: Prism.Token | Prism.TokenStream | string, language: string) => {
+  const encoded = encode(token as WrappedToken);
+  const cache: string[] = [];
+  const tokens = preWrap(Array.isArray(encoded) ? encoded : [encoded], language) as WrappedToken[];
+
+  for (let i = tokens.length - 1; i >= 0; i--) {
+    const current = tokens[i];
+    if (typeof current !== 'string' && current.type === 'property') {
+      const objectPath = getObjectPath(current);
+      if (cache.includes(objectPath)) {
+        current.classes.push('exist-property');
+      } else {
+        cache.push(objectPath);
+      }
+    }
+  }
+
+  const renderToken = (tok: WrappedTokenStream, key: string): React.ReactNode => {
+    if (Array.isArray(tok)) {
+      const newKey = `${key}_${getTokenContent(tok)}`;
+      return <span key={newKey}>{tok.map((t, i) => renderToken(t, `${newKey}_${i}`))}</span>;
+    } else if (isToken(tok)) {
+      const newKey = `${key}_${getTokenContent(tok)}`;
+      return (
+        <span key={newKey} className={tok.classes.join(' ')}>
+          {renderToken(tok.content, newKey)}
+        </span>
+      );
+    }
+    return <span key={`${key}_${tok}`}>{tok}</span>;
+  };
+
+  let lineNo = 0;
+  const lines: Prism.Token[][] = [];
+
+  for (let i = 0; i < tokens?.length; i++) {
+    const current = tokens[i];
+    if (current) {
+      if (current.content === '\n') {
+        lineNo += 1;
+      } else {
+        lines[lineNo] = [...(lines[lineNo] || []), current];
+      }
+    }
+  }
+
+  const Row = ({ index, style }: { index: number; style: React.CSSProperties }) => (
+    <div style={style}>{(lines[index] || []).map((tok, key) => renderToken(tok as WrappedToken, `${index}_${key}`))}</div>
+  );
+
+  return [Row, lines] as const;
 };

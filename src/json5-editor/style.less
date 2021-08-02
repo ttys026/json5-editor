@@ -30,6 +30,13 @@
     color: #999;
     min-width: 38px;
     line-height: 1;
+    overflow: auto;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
 
     & > .errorLine {
       background: rgba(255, 77, 79, 0.9);
@@ -145,5 +152,13 @@
   }
   pre {
     color: #005cc5;
+    // & div {
+    //   display: inline;
+    // }
+    &::-webkit-scrollbar {
+      display: none;
+    }
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
   }
 }

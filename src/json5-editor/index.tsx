@@ -1,8 +1,6 @@
-import React, { forwardRef, memo, Ref, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import React, { forwardRef, memo, Ref, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { tokenize } from 'prismjs/components/prism-core';
 import classNames from 'classnames';
-// TODO: need fork react-simple-code-editor's code to disable auto complete
-// @ts-expect-error
 import Editor from './Editor';
 import { endList, startList } from './constant';
 import {
@@ -19,12 +17,14 @@ import {
 } from './utils/autoComplete';
 import { activePairs, clearPairs } from './utils/match';
 import copy from 'copy-to-clipboard';
-import { lex, afterTokenizeHook, tokenStreamToHtml } from './utils/prism';
+import { lex, afterTokenizeHook, tokenStreamToHtml, tokenToNode, tokenizeWithCache } from './utils/prism';
 import { addLineNumber, getCollapsedContent } from './utils/lineNumber';
 import { Traverse, ValidateError } from './utils/format';
 import './style.less';
 import useWidth from './hooks/useWidth';
+import { FixedSizeList } from 'react-window';
 import useUpdateEffect from './hooks/useUpdateEffect';
+// import Editor from './newEditor';
 export interface Props {
   initialValue?: string;
   value?: string;
@@ -36,6 +36,7 @@ export interface Props {
   readOnly?: boolean;
   showLineNumber?: boolean;
   formatConfig?: Omit<FormatConfig, 'type'>;
+  height: number;
 }
 
 export interface RefProps {
@@ -78,10 +79,15 @@ export default memo(
     const editStarted = useRef(false);
     const isFocused = useRef(false);
     const formatConfig = useRef(props.formatConfig);
+    const virtualListRef = useRef<FixedSizeList<any>>(null);
     formatConfig.current = props.formatConfig;
-
+    const lineNumberRef = useRef<HTMLDivElement>(null);
+    const selectionRef = useRef({ selectionStart: 0, selectionEnd: 0 });
+    const editorId = useRef(Symbol());
     const codeRef = useRef(code);
     codeRef.current = code;
+
+    const { height = 200 } = props;
 
     const getExpandedCode = useCallback((code: string = codeRef.current) => {
       let newCode = code.replace(/(\{┉\}\u200c*)|(\[┉\]\u200c*)/g, (match) => {
@@ -92,7 +98,7 @@ export default memo(
         newCode = getExpandedCode(newCode);
       }
 
-      const fullTokens = tokenize(newCode, lex);
+      const fullTokens = tokenizeWithCache(newCode, lex, editorId.current);
       const fullTraverse = new Traverse(fullTokens, formatConfig.current);
 
       return fullTraverse.format();
@@ -100,7 +106,7 @@ export default memo(
 
     const validateFullCode = () => {
       try {
-        const fullTokens = tokenize(getExpandedCode(), lex);
+        const fullTokens = tokenizeWithCache(getExpandedCode(), lex, editorId.current);
         const fullTraverse = new Traverse(fullTokens, formatConfig.current);
         fullTraverse.validate({ mode: 'loose' });
         setFormatError(null);
@@ -135,7 +141,7 @@ export default memo(
 
     const onCollapse = (newCode: string, collapsedCode: string, uuid: number) => {
       collapsedList.current[uuid] = collapsedCode;
-      const tokens = tokenize(newCode, lex);
+      const tokens = tokenizeWithCache(newCode, lex, editorId.current);
       const traverse = new Traverse(tokens, formatConfig.current);
       _setCode(traverse.format());
     };
@@ -146,7 +152,7 @@ export default memo(
         return count === uuid ? collapsedList.current[uuid] : match;
       });
 
-      const tokens = tokenize(newCode, lex);
+      const tokens = tokenizeWithCache(newCode, lex, editorId.current);
       const traverse = new Traverse(tokens, formatConfig.current);
 
       _setCode(traverse.format());
@@ -221,7 +227,7 @@ export default memo(
         const content = getCollapsedContent(collapsedList.current, selected);
         if (/(\{┉\}\u200c*)|(\[┉\]\u200c*)/g.test(selected)) {
           e.preventDefault();
-          copy(new Traverse(tokenize(content, lex), formatConfig.current).format());
+          copy(new Traverse(tokenizeWithCache(content, lex, editorId.current), formatConfig.current).format());
         }
       };
 
@@ -233,7 +239,7 @@ export default memo(
         const content = getCollapsedContent(collapsedList.current, selected);
         if (/(\{┉\}\u200c*)|(\[┉\]\u200c*)/g.test(selected)) {
           e.preventDefault();
-          copy(new Traverse(tokenize(content, lex), formatConfig.current).format());
+          copy(new Traverse(tokenizeWithCache(content, lex, editorId.current), formatConfig.current).format());
           setCode(newText);
           textArea?.setSelectionRange(startPos, startPos);
         }
@@ -257,6 +263,7 @@ export default memo(
         const textArea = textAreaRef.current!;
         const startPos = textArea?.selectionStart || 0;
         const endPos = textArea?.selectionEnd || 0;
+        selectionRef.current = { selectionStart: startPos, selectionEnd: endPos };
         if (ev.code === 'Backspace') {
           const index = getCurrentTokenIndex(tokensRef.current, startPos);
           const currentToken = tokensRef.current[index];
@@ -523,18 +530,20 @@ export default memo(
         element: container.current!,
         error: formatError,
       };
-      env.tokens = tokenize(code, lex);
+      env.tokens = tokenizeWithCache(code, lex, editorId.current);
       afterTokenizeHook(env);
       env.tokenLines = markErrorToken(env.tokens, formatError);
       tokenLinesRef.current = env.tokenLines;
       env.fullTokens = getExpandedCode();
-      const htmlString = tokenStreamToHtml(env.tokens, env.language!);
+      const nodes = tokenToNode(env.tokens, env.language!);
+      // const htmlString = tokenStreamToHtml(env.tokens, env.language!);
       autoFill(env);
       if (props.showLineNumber) {
         addLineNumber(env, onCollapse, onExpand);
       }
       tokensRef.current = env.tokens;
-      return htmlString;
+      return nodes;
+      // return htmlString;
     };
 
     useEffect(() => {
@@ -544,21 +553,29 @@ export default memo(
     return (
       <div
         ref={container}
-        style={{ maxHeight: 600 }}
+        style={{ overflow: 'hidden', userSelect: 'none', maxHeight: height, height: height }}
         className={classNames('json5-editor-wrapper', Boolean(formatError) ? 'json5-editor-wrapper-has-error' : '', props.className, props.disabled ? 'json5-editor-wrapper-disabled' : '')}
       >
-        {props.showLineNumber && <div className="line-numbers-rows" />}
+        {props.showLineNumber && <div ref={lineNumberRef} style={{ height: height }} className="line-numbers-rows" />}
         <Editor
           ref={(r: any) => {
-            textAreaRef.current = r?._input;
+            textAreaRef.current = r?._input.current;
             preElementRef.current = textAreaRef.current?.nextElementSibling as HTMLPreElement;
           }}
           value={code}
           disabled={shouldForbiddenEdit}
           placeholder={props.placeholder}
-          onValueChange={setCode}
+          onValueChange={(v) => setCode(v)}
+          height={height}
+          virtualList={virtualListRef}
+          lineNumberRef={lineNumberRef}
           highlight={(code: string) => {
-            return highlight(code);
+            const [Row, lines] = highlight(code);
+            return (
+              <FixedSizeList ref={virtualListRef} height={height - 16} itemCount={lines.length} itemSize={21} width={21474836}>
+                {Row}
+              </FixedSizeList>
+            );
           }}
           padding={8}
           style={{
