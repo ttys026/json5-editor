@@ -84,7 +84,7 @@ export default memo(
     codeRef.current = code;
 
     const getExpandedCode = useCallback((code: string = codeRef.current) => {
-      let newCode = code.replace(/(\{┉\}\u200c*)|(\[┉\]\u200c*)/g, (match) => {
+      let newCode = code.replace(/(\{┉\}\u200c*)|(\[┉\]\u200c*)/g, match => {
         const count = match.length - 3;
         return collapsedList.current[count] || match;
       });
@@ -105,14 +105,14 @@ export default memo(
         fullTraverse.validate({ mode: 'loose' });
         setFormatError(null);
       } catch (e) {
-        setFormatError(e);
+        setFormatError(e as ValidateError);
         if (process.env.NODE_ENV === 'development') {
           console.log(e);
         }
       }
     };
 
-    const setCode: React.Dispatch<React.SetStateAction<string>> = (val) => {
+    const setCode: React.Dispatch<React.SetStateAction<string>> = val => {
       _setCode(val);
       editStarted.current = true;
     };
@@ -141,7 +141,7 @@ export default memo(
     };
 
     const onExpand = (uuid: number) => {
-      const newCode = codeRef.current.replace(/(\{┉\}\u200c*)|(\[┉\]\u200c*)/g, (match) => {
+      const newCode = codeRef.current.replace(/(\{┉\}\u200c*)|(\[┉\]\u200c*)/g, match => {
         const count = match.length - 3;
         return count === uuid ? collapsedList.current[uuid] : match;
       });
@@ -263,7 +263,7 @@ export default memo(
           if (isToken(currentToken) && currentToken.type === 'collapse') {
             ev.preventDefault();
             const tokens = getTokensOfCurrentLine(tokensRef.current, startPos);
-            const collapse = tokens.find((tok) => isToken(tok) && tok.type === 'collapse');
+            const collapse = tokens.find(tok => isToken(tok) && tok.type === 'collapse');
             const uuid = (collapse?.length || 3) - 3;
             onExpand(uuid);
             textArea.setSelectionRange(startPos - collapsedList.current.length, endPos - collapsedList.current.length);
@@ -293,14 +293,14 @@ export default memo(
           endPos = textArea?.selectionEnd || 0;
           if (codeRef.current[startPos] === '┉' && codeRef.current[endPos] === '┉') {
             const tokens = getTokensOfCurrentLine(tokensRef.current, startPos);
-            const collapse = tokens.find((tok) => isToken(tok) && tok.type === 'collapse');
+            const collapse = tokens.find(tok => isToken(tok) && tok.type === 'collapse');
             const uuid = (collapse?.length || 3) - 3;
             onExpand(uuid);
             textArea.setSelectionRange(startPos, endPos);
           }
           if (['}', ']'].includes(codeRef.current[startPos]) && ['}', ']'].includes(codeRef.current[endPos]) && codeRef.current[startPos - 1] === '┉') {
             const tokens = getTokensOfCurrentLine(tokensRef.current, startPos);
-            const collapse = tokens.find((tok) => isToken(tok) && tok.type === 'collapse');
+            const collapse = tokens.find(tok => isToken(tok) && tok.type === 'collapse');
             const uuid = (collapse?.length || 3) - 3;
             onExpand(uuid);
             textArea.setSelectionRange(startPos, endPos);
@@ -331,7 +331,7 @@ export default memo(
           codeRef.current
             .slice(startPos)
             .split('')
-            .filter((ele) => ele === '"').length %
+            .filter(ele => ele === '"').length %
             2 ===
           1
         ) {
@@ -341,7 +341,7 @@ export default memo(
           codeRef.current
             .slice(startPos)
             .split('')
-            .filter((ele) => ele === "'").length %
+            .filter(ele => ele === "'").length %
             2 ===
           1
         ) {
@@ -411,14 +411,14 @@ export default memo(
           ];
           inner: for (let [start, end] of pairs) {
             let previousList = getTokensOfCurrentLine(env.tokens, startPos - 1);
-            previousList = previousList.filter((tok) => getTokenContent(tok).trim() && isToken(tok) && tok.type !== 'comment');
+            previousList = previousList.filter(tok => getTokenContent(tok).trim() && isToken(tok) && tok.type !== 'comment');
             const lastToken = previousList.pop();
             if (tokenContentEquals(lastToken, start)) {
               requestAnimationFrame(() => {
                 const { leadingWhiteSpace } = getLinesByPos(codeRef.current, startPos);
                 const codeArray = codeRef.current.split('');
                 // start count !== end count, then append
-                const needFill = codeArray.filter((ele) => ele === start).length !== codeArray.filter((ele) => ele === end).length;
+                const needFill = codeArray.filter(ele => ele === start).length !== codeArray.filter(ele => ele === end).length;
                 if (needFill) {
                   insertText(`${generateWhiteSpace(leadingWhiteSpace + 2)}\n${generateWhiteSpace(leadingWhiteSpace)}${end}`);
                   textArea?.setSelectionRange(startPos + leadingWhiteSpace + 2, startPos + leadingWhiteSpace + 2);
@@ -442,7 +442,7 @@ export default memo(
             const { leadingWhiteSpace } = getLinesByPos(codeRef.current, startPos);
             const fullList = getTokensOfCurrentLine(env.tokens, startPos - 1);
 
-            const tokenList = fullList.filter((ele) => isToken(ele) && ele.type !== 'comment' && getTokenContent(ele).trim());
+            const tokenList = fullList.filter(ele => isToken(ele) && ele.type !== 'comment' && getTokenContent(ele).trim());
             const whiteSpace = generateWhiteSpace(leadingWhiteSpace);
 
             if (tokenList.length === 0) {
@@ -456,14 +456,14 @@ export default memo(
             textArea?.setSelectionRange(startPos - fullListLength - 1, startPos);
 
             const lines = formatted.split('\n');
-            const insert = lines.map((line) => `${whiteSpace}${line}`).join('\n');
+            const insert = lines.map(line => `${whiteSpace}${line}`).join('\n');
             insertText(`${insert}\n${whiteSpace}`);
           });
           break;
         }
         case ev?.key === ':' && tokenContentEquals(current, ':'): {
           requestAnimationFrame(() => {
-            const line = getTokensOfCurrentLine(tokensRef.current, startPos).filter((tok) => getTokenContent(tok).trim());
+            const line = getTokensOfCurrentLine(tokensRef.current, startPos).filter(tok => getTokenContent(tok).trim());
             if (line.length === 2 && isToken(line[0]) && line[0].type === 'property') {
               insertText(' ');
             }
@@ -477,7 +477,7 @@ export default memo(
             const fullList = getTokensOfCurrentLine(env.tokens, startPos);
             const fullListLength = getLengthOfToken(fullList);
             const previousList = getTokensOfCurrentLine(env.tokens, startPos - fullListLength - 1);
-            leadingWhiteSpace = previousList.some((tok) => isToken(tok) && tokenContentEquals(tok, '{')) && startPos !== fullListLength ? leadingWhiteSpace + 2 : leadingWhiteSpace;
+            leadingWhiteSpace = previousList.some(tok => isToken(tok) && tokenContentEquals(tok, '{')) && startPos !== fullListLength ? leadingWhiteSpace + 2 : leadingWhiteSpace;
             const formatted = new Traverse(fullList, { ...formatConfig.current, type: 'segment' }).format();
             textArea?.setSelectionRange(startPos - fullListLength, startPos);
             const whiteSpace = generateWhiteSpace(leadingWhiteSpace);
